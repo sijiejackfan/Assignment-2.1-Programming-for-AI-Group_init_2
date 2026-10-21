@@ -1,11 +1,12 @@
-"""
-Sorts, argpartition/Top-k, quickselect, binary_search
-- **Sorting**:
-  - Stable sort wrapper (`np.sort(kind='stable')`)
-  - Multi-key sort (sort by multiple columns)
-- **Top-k / Partial Sort**:
-  - `topk(values, k, largest=True, return_indices=True)` using `np.argpartition`
-  - Implement **quickselect** for educational purposes
-- **Searching**:
-  - `binary_search(sorted_array, x)` returning insertion index and existence boolean
-"""
+import numpy as np
+
+#Stable Sort
+
+def stable_sort(values, axis=-1):
+    """We are sorting values while preserving the order of equal elements."""
+    arr = np.asarray(values) #converting the input into a NumPy array
+
+    if not np.issubdtype(arr.dtype, np.number):
+        raise TypeError("values must contain numeric data") #checking whether the data type is numeric
+
+    return np.sort(arr, axis=axis, kind="stable")
