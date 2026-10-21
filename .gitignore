@@ -1,0 +1,45 @@
+
+# ==========================================
+# NumCompute - Git Ignore
+# ==========================================
+
+# Python Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python Cache and Compiled Files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python Packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing and Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# IDE and Editor
+.vscode/
+.idea/
+
+# Operating System
+.DS_Store
+Thumbs.db
+
+# Temporary Files
+*.tmp
+*.temp
+*.bak
+*~
