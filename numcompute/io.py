@@ -18,6 +18,6 @@ missing values: filled with np.nan by default using np.genfromtxt
 What's missing: streaming / chunking, 
 """
 def load_csv(fileName, delim, skipheader = 1):
-    data = np.genfromtxt(fileName, delimiter=delim, dtype=float, skip_header=skipheader)
+    data = np.genfromtxt(fileName, delimiter=delim, dtype=None, skip_header=skipheader, ndmin=2)
     return data
 
