@@ -17,6 +17,17 @@ https://www.geeksforgeeks.org/machine-learning/ml-one-hot-encoding/
 """
 import numpy as np
 
+def process_numeric(data, placeholder=0):
+    data = np.ma.asarray(data, dtype=float)
+
+    data = np.ma.masked_where(np.isnan(data), data)
+
+    cleaned = data.filled(placeholder)
+
+    if cleaned.ndim == 1:
+        cleaned = cleaned.reshape(-1, 1)
+
+    return cleaned
 
 class StandardScaler:
 

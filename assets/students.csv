@@ -1,0 +1,11 @@
+StudentID,Age,GPA,City,Course
+1001,20,5.5,Adelaide,Computing
+1002,22,6.0,Sydney,DataScience
+1003,,4.5,Melbourne,Computing
+1004,19,,Adelaide,Math
+1005,25,6.5,,Computing
+1006,21,5.0,Canberra,
+1007,,5.8,Sydney,Computing
+1008,23,,Melbourne,DataScience
+1009,24,6.2,Adelaide,Math
+1010,20,5.7,Brisbane,Computing
