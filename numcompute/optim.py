@@ -10,7 +10,6 @@
 
 import numpy as np
 
-
 def gradient(func, x, h=1e-5):
     x = np.asarray(x, dtype=float)
     grad = np.zeros_like(x)
@@ -18,25 +17,20 @@ def gradient(func, x, h=1e-5):
     for i in range(len(x)):
         x1 = x.copy()
         x2 = x.copy()
-
         x1[i] += h
         x2[i] -= h
-
         grad[i] = (func(x1) - func(x2)) / (2 * h)
 
     return grad
 
-
 def jacobian(func, x, h=1e-5):
     x = np.asarray(x, dtype=float)
     y = np.atleast_1d(func(x))
-
     jac = np.zeros((len(y), len(x)))
 
     for i in range(len(x)):
         x1 = x.copy()
         x2 = x.copy()
-
         x1[i] += h
         x2[i] -= h
 
