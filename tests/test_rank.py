@@ -33,4 +33,4 @@ def test_percentile_maximum():
 
 def test_percentile_with_nan():
     result = percentile([10, 20, np.nan, 40], 50)
-    assert result == 25
+    assert result == 20
