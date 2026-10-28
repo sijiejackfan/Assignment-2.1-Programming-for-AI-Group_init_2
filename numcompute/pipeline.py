@@ -13,59 +13,128 @@ Transformer/Estimator API, Compose, FeatureUnion
   X_tr = pipe.fit_transform(X)
 
 """
+import numpy as np
 
 class Pipeline:
+    """
+    Connect multiple transformers and process data in order, with the output of each transformer passed to the next one.
+
+    Parameters:
+    steps: a list of tuples containing the name and transformer object for each step.
+    Attributes：
+    steps: a list of tuples containing the name and transformer object for each step.
+    Raises:
+    ValueError: if the steps list is empty.
+    AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). The code was reviewed and modified
+    to fit the package requirements.
+    """
 
     def __init__(self, steps):
         if not steps:
             raise ValueError("Pipeline must contain at least one step")
         self.steps = steps
 
-    def fit(self, X):
-        data = X
+    def fit(self, data):
+        """
+        Fit all transformers in the pipeline in order.
+        Parameters:
+        data: a 2D numpy array
+        Returns
+        self: the fitted Pipeline object.
+        """
+        processed = data
         for name, transformer in self.steps[:-1]:
-            transformer.fit(data)
-            data = transformer.transform(data)
+            transformer.fit(processed)
+            processed = transformer.transform(processed)
 
         last_transformer = self.steps[-1][1]
-        last_transformer.fit(data)
+        last_transformer.fit(processed)
         return self
 
-    def transform(self, X):
-        data = X
+    def transform(self, data):
+        """
+        Transform the data through all transformers in order.
+        Parameters:
+        data: a 2D numpy array containing the input data.
+        Returns:
+        a transformed 2D numpy array containing the output of the last transformer.
+        """
+        processed = data
         for name, transformer in self.steps:
-            data = transformer.transform(data)
-        return data
+            processed = transformer.transform(processed)
+        return processed
 
-    def fit_transform(self, X):
-        self.fit(X)
-        return self.transform(X)
+    def fit_transform(self, data):
+        """
+        Combine fitting and transforming together
+        Parameters:
+        data: a 2D numpy array
+        Returns
+        a transformed 2D numpy array containing the output of the last transformer.
+        Raises
+        same as in fit and transform
+        """
+        self.fit(data)
+        return self.transform(data)
 
-import numpy as np
 
 class FeatureUnion:
+    """
+    Process the same input data through multiple transformers separately, and combine their results into one numpy array.
+
+    Parameters:
+    transformers: a list of tuples containing the name and transformer object for each processing branch.
+    Attributes:
+    transformers: the list of transformers used for processing.
+    Raises:
+    ValueError: if the transformers list is empty.
+    """
 
     def __init__(self, transformers):
         if not transformers:
             raise ValueError("FeatureUnion requires at least one transformer")
         self.transformers = transformers
 
-    def fit(self, X):
+    def fit(self, data):
+        """
+        Fit each transformer using the same input data.
+        Parameters:
+        data: a 2D numpy array containing the input data.
+        Returns:
+        self: the fitted FeatureUnion object.
+        """
         for name, transformer in self.transformers:
-            transformer.fit(X)
+            transformer.fit(data)
         return self
 
-    def transform(self, X):
+    def transform(self, data):
+        """
+        Transform the input data through each transformer separately, then combine the results using np.hstack().
+        Parameters:
+        data: a 2D numpy array containing the input data.
+        Returns: a combined 2D numpy array with the integrated data.
+        Raises:
+        ValueError: if any transformer output is not 2D.
+        """
         results = []
         for name, transformer in self.transformers:
-            result = transformer.transform(X)
+            result = transformer.transform(data)
 
             if np.ndim(result) != 2:
                 raise ValueError("Transformer output must be 2D")
             results.append(result)
-            
+
         return np.hstack(results)
 
-    def fit_transform(self, X):
-        self.fit(X)
-        return self.transform(X)
+    def fit_transform(self, data):
+        """
+        Combine fitting and transforming together
+        Parameters:
+        data: a 2D numpy array
+        Returns:
+        a combined 2D numpy array with the integrated data.
+        Raises:
+        same as in fit and transform
+        """
+        self.fit(data)
+        return self.transform(data)

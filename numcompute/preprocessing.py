@@ -23,10 +23,12 @@ class ColumnSelector:
     Parameters:
     columns : a string list, names of all columns in the input data. (this would be returned from io result)
     selected : a string list, names of the columns to select.
-    Attributes
+    Attributes：
     columns : a string list, names of all columns in the input data. (this would be returned from io result)
     selected : a string list, names of the columns to select.
     indices : a int list or None, Indices of selected columns, determined during fit().
+    AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). The code was reviewed and modified
+    to fit the package requirements.
     """
     def __init__(self, columns, selected):
         self.columns = columns
@@ -38,9 +40,9 @@ class ColumnSelector:
         Find and store the indices of selected columns.
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns；
         self: ColumnSelector after fitted
-        Raises
+        Raises:
         ValueError: if dimensions are not 2 or doesn't match with column number, or column name not found
         """
         if not np.ndim(data) == 2:
@@ -59,9 +61,9 @@ class ColumnSelector:
         Extract selected columns from input array
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         a numpy array containing the selected columns
-        Raises
+        Raises:
         ValueError: if dimensions are not 2 or doesn't match with column number, or transformed without fitting
         """
         if not np.ndim(data) == 2:
@@ -77,9 +79,9 @@ class ColumnSelector:
         Combine fitting and transforming together
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         a numpy array containing the selected columns
-        Raises
+        Raises:
         same as in fit and transform
         """
         self.fit(data)
@@ -92,9 +94,11 @@ class SimpleImputer:
     Parameters:
     fill_value: value used to fill missing, default 0
     dtype: type of the data (string or float). Used to determine what type the array should be
-    Attributes
+    Attributes:
     fill_value: value used to fill missing, default 0
     dtype: type of the data (string or float). Used to determine what type the array should be
+    AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). The code was reviewed and modified
+    to fit the package requirements.
     """
     def __init__(self, fill_value=0, dtype=float):
         self.fill_value = fill_value
@@ -105,9 +109,9 @@ class SimpleImputer:
         Do not really do anything, only to fit API
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         self: SimpleImputer after fitted
-        Raises
+        Raises:
         ValueError: if dimensions are not 2 
         """
         if np.ndim(data) != 2:
@@ -119,9 +123,9 @@ class SimpleImputer:
         Fill the array with fill values, and convert to the correct data type for further processing
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         a transformed numpy array with filled values and correct data type
-        Raises
+        Raises:
         ValueError: if dimensions are not 2, type is not float or string
         """
         if np.ndim(data) != 2:
@@ -147,9 +151,9 @@ class SimpleImputer:
         Combine fitting and transforming together
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         a transformed numpy array with filled values and correct data type
-        Raises
+        Raises:
         same as in fit and transform
         """
         self.fit(data)
@@ -175,9 +179,9 @@ class StandardScaler:
         Calculate and store the mean and standard deviation of each column
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         self: a fitted StandScaler
-        Raises
+        Raises:
         ValueError: if dimensions are not 2 
         """
         if np.ndim(data) != 2:
@@ -191,9 +195,9 @@ class StandardScaler:
         standardize the input data using the mean and standard deviation
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         a transformed 2D numpy array with standardized values
-        Raises
+        Raises:
         ValueError: if dimensions are not 2 
         """
         if np.ndim(data) != 2:
@@ -207,9 +211,9 @@ class StandardScaler:
         Combine fitting and transforming together
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         a transformed 2D numpy array with standardized values
-        Raises
+        Raises:
         same as in fit and transform
         """
         self.fit(data)
@@ -245,9 +249,9 @@ class MinMaxScaler:
         Calculate and store the min and max of each column
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         self: a fitted MinMaxScaler
-        Raises
+        Raises:
         ValueError: if dimensions are not 2 
         """
         if np.ndim(data) != 2:
@@ -261,9 +265,9 @@ class MinMaxScaler:
         standardize the input data using the min and max in the given range
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         a transformed 2D numpy array with standardized values
-        Raises
+        Raises:
         ValueError: if dimensions are not 2 
         """
         if np.ndim(data) != 2:
@@ -279,9 +283,9 @@ class MinMaxScaler:
         Combine fitting and transforming together
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         a transformed 2D numpy array with standardized values
-        Raises
+        Raises:
         same as in fit and transform
         """
         self.fit(data)
@@ -307,9 +311,9 @@ class OneHotEncoder:
         Find and store the unique categories of each column
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         self: a fitted OneHotEncoder
-        Raises
+        Raises:
         ValueError: if dimensions are not 2 
         """
         if np.ndim(data) != 2:
@@ -324,9 +328,9 @@ class OneHotEncoder:
         Convert categorical columns into one-hot encoded numerical arrays, then the encoded columns are combined into a single 2D array.
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         a 2d int array with shape (n_samples, n_features), each value is either 0 or 1.
-        Raises
+        Raises:
         ValueError: if dimensions are not 2 or input shape do not match, or encoder is not fitted
         """
         if self.categories is None:
@@ -346,9 +350,9 @@ class OneHotEncoder:
         Combine fitting and transforming together
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         a 2d int array with shape (n_samples, n_features), each value is either 0 or 1.
-        Raises
+        Raises:
         same as in fit and transform
         """
         self.fit(data)
