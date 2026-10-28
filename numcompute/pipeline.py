@@ -17,7 +17,7 @@ import numpy as np
 
 class Pipeline:
     """
-    Connect multiple transformers and optionally an estimator to process data in order and process data in order (predictor needs to be at the last step), with the output of each transformer passed to the next one.
+    Connect multiple transformers and optionally an estimator to process data in order (predictor needs to be at the last step), with the output of each transformer passed to the next one.
 
     Parameters:
     steps: a list of tuples containing the name and transformer object for each step.
@@ -39,8 +39,11 @@ class Pipeline:
         Fit all transformers in the pipeline in order. Or predictor for the last step. 
         Parameters:
         data: a 2D numpy array
-        Returns
+        y: target values required when the last step is an estimator.
+        Returns:
         self: the fitted Pipeline object.
+        Raises:
+        ValueError: if the predictor is not in the last step
         """
         processed = data
         for name, transformer in self.steps[:-1]:
@@ -80,9 +83,9 @@ class Pipeline:
         Combine fitting and transforming together
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         a transformed 2D numpy array containing the output of the last transformer.
-        Raises
+        Raises:
         same as in fit and transform
         """
         last = self.steps[-1][1]
@@ -98,9 +101,9 @@ class Pipeline:
         Use predict if the last step in the pipeline is a predictor. Only works when predictor is the last step
         Parameters:
         data: a 2D numpy array
-        Returns
+        Returns:
         predicted values using the given predict() API from predictor
-        Raises
+        Raises:
         ValueError: if the last step is not a predictor yet predict is used
         """
         last = self.steps[-1][1]
