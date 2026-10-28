@@ -8,6 +8,7 @@ CSV reader (streaming/chunking), dtype handling
 """
 import numpy as np
 from itertools import islice
+import csv
 
 """
 Read csv file into numpy array using np.genfromtxt
@@ -15,13 +16,14 @@ fileName: csv file name to read from
 delim: type of the delimiter
 dtype: type of the data
 skipheader: number of lines to skip, default 1
-missing values: filled with np.nan by default using np.genfromtxt
-What's missing: streaming / chunking, 
+missing values: kept as empty strings and can be handled later during preprocessing.
 Sources: https://numpy.org/devdocs/reference/generated/numpy.genfromtxt.html
 """
 def load_csv(fileName, delim=","):
-    data = np.genfromtxt(fileName, delimiter=delim, dtype=None, names = True, encoding=None, ndmin=2, usemask=True)
-    return data
+    with open(fileName, "r", encoding="utf-8-sig", newline="") as file:
+        columns = next(csv.reader(file, delimiter=delim))
+        data = np.genfromtxt(file, delimiter=delim, dtype=str, ndmin=2, autostrip=True)
+    return data, columns
 
 def load_csv_chunks(fileName, delim=",", chunk_size=1000):
     if not isinstance(chunk_size, int):
@@ -29,8 +31,7 @@ def load_csv_chunks(fileName, delim=",", chunk_size=1000):
     elif chunk_size <= 0:
         raise ValueError("chunk size must be positive")
     with open(fileName, "r", encoding="utf-8") as file:
-        header = next(file).strip()
-        names = header.split(delim)
+        columns = next(csv.reader(file, delimiter=delim))
 
         while True:
             lines = list(islice(file, chunk_size))
@@ -38,8 +39,8 @@ def load_csv_chunks(fileName, delim=",", chunk_size=1000):
             if not lines:
                 break
 
-            data = np.genfromtxt(lines, delimiter=delim, dtype=None, ndmin=2, encoding=None, names = names, usemask=True)
+            data = np.genfromtxt(lines, delimiter=delim, dtype=str, ndmin=2, autostrip=True)
 
             if data.size > 0:
-                yield data
+                yield data, columns
 
