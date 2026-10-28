@@ -63,6 +63,35 @@ In this package, there is no predictor provided. However, the pipeline supports 
 - The column names and order for new data must match those used when fitting `ColumnSelector`.
 - `Pipeline` allows transformers in intermediate steps. A predictor, when used, belongs in the last step.
 
+## Other Modules
+
+Besides data preprocessing, NumCompute also provides functions for statistics, evaluation, sorting and searching. These functions can be used independently with NumPy arrays.
+
+### Statistics
+
+`stats.py` provides functions for calculating basic statistics, including `mean()`, `median()`, `std()`, `minimum()`, `maximum()`, `quantile()`, and `histogram()`.
+
+Users can pass numerical arrays to these functions to calculate statistics. `quantile()` calculates values at specified quantiles, while `histogram()` returns the counts and bin edges for a given number of bins.
+
+![stats](assets/img7.png)
+
+### Metrics
+
+`metrics.py` provides functions for evaluating prediction results, including `accuracy()`, `precision()`, `recall()`, `f1()`, `confusion_matrix()`, and `mse()`.
+
+Users provide the actual values (`y_true`) and predicted values (`y_pred`) to calculate evaluation metrics. The classification metrics use binary labels (0 and 1), while MSE is used for numerical predictions.
+
+![metrics](assets/img8.png)
+
+
+### Sorting and Searching
+
+`sort_search.py` provides several sorting and searching functions, including `stable_sort()`, `quick_sort()`, `merge_sort()`, `topk()`, `top_p()`, `quickselect()`, and `binary_search()`.
+
+Users can sort numerical arrays, find the largest or smallest values, or search for an element in sorted data. `quickselect()` uses a zero-based index, and `binary_search()` requires the input array to be sorted.
+
+![sort_search](assets/img9.png)
+
 
 ## Performance Comparisons
 
