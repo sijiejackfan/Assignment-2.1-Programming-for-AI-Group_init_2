@@ -3,7 +3,7 @@
 ## Group Formation
 a3236464 Sijie Fan
 
-Santrupth Shivanna
+a3224110 Santrupth Shivanna
 
 # NumCompute
 
