@@ -8,6 +8,7 @@ Sorting and Searching
   * topk() - the k largest or smallest elements using "argpartition"
   * top_p() - the top p ratio of elements
   * quickselect() - the kth smallest element
+  * binary_search() - find an element in a sorted array
 
 ** Requirements:
   * Using NumPy for array operations
@@ -105,6 +106,16 @@ def topk(values, k, largest=True):
         indices = indices[np.argsort(arr[indices])]
 
     return arr[indices]
+ 
+
+def top_p(values, p, largest=True):
+    arr = np.asarray(values)
+
+    if not 0 <= p <= 1:
+        raise ValueError("p must be between 0 and 1")
+
+    k = int(np.ceil(len(arr) * p))
+    return topk(arr, k, largest)
 
 
 def quickselect(values, k):
@@ -120,3 +131,15 @@ def quickselect(values, k):
         raise ValueError("k must be between 0 and len(values)-1")
 
     return np.partition(arr, k)[k]
+
+
+def binary_search(sorted_array, x):
+    arr = np.asarray(sorted_array)
+
+    if arr.ndim != 1:
+        raise ValueError("values must be a 1D array")
+
+    index = np.searchsorted(arr, x)
+    found = index < len(arr) and arr[index] == x
+
+    return index, bool(found)
