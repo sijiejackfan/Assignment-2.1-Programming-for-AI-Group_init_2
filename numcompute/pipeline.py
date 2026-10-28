@@ -129,6 +129,8 @@ class FeatureUnion:
     transformers: the list of transformers used for processing.
     Raises:
     ValueError: if the transformers list is empty.
+    AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). The code was reviewed and modified
+    to fit the package requirements.
     """
 
     def __init__(self, transformers):
