@@ -17,7 +17,7 @@ import numpy as np
 
 class Pipeline:
     """
-    Connect multiple transformers and process data in order, with the output of each transformer passed to the next one.
+    Connect multiple transformers and optionally an estimator to process data in order and process data in order (predictor needs to be at the last step), with the output of each transformer passed to the next one.
 
     Parameters:
     steps: a list of tuples containing the name and transformer object for each step.
@@ -34,9 +34,9 @@ class Pipeline:
             raise ValueError("Pipeline must contain at least one step")
         self.steps = steps
 
-    def fit(self, data):
+    def fit(self, data, y=None):
         """
-        Fit all transformers in the pipeline in order.
+        Fit all transformers in the pipeline in order. Or predictor for the last step. 
         Parameters:
         data: a 2D numpy array
         Returns
@@ -44,11 +44,19 @@ class Pipeline:
         """
         processed = data
         for name, transformer in self.steps[:-1]:
+            if (hasattr(transformer, "predict")):
+                raise ValueError("predictor must be in the last step")
             transformer.fit(processed)
             processed = transformer.transform(processed)
 
-        last_transformer = self.steps[-1][1]
-        last_transformer.fit(processed)
+        last = self.steps[-1][1]
+
+        if hasattr(last, "predict"):
+            if y is None:
+                raise ValueError("Estimator requires y")
+            last.fit(processed, y)
+        else:
+            last.fit(processed)
         return self
 
     def transform(self, data):
@@ -59,6 +67,9 @@ class Pipeline:
         Returns:
         a transformed 2D numpy array containing the output of the last transformer.
         """
+        last = self.steps[-1][1]
+        if hasattr(last, "predict"):
+            raise ValueError("Pipeline ends with an predictor")
         processed = data
         for name, transformer in self.steps:
             processed = transformer.transform(processed)
@@ -74,8 +85,35 @@ class Pipeline:
         Raises
         same as in fit and transform
         """
+        last = self.steps[-1][1]
+
+        if hasattr(last, "predict"):
+            raise ValueError("Cannot fit_transform an predictor pipeline")
+
         self.fit(data)
         return self.transform(data)
+
+    def predict(self, data):
+        """
+        Use predict if the last step in the pipeline is a predictor. Only works when predictor is the last step
+        Parameters:
+        data: a 2D numpy array
+        Returns
+        predicted values using the given predict() API from predictor
+        Raises
+        ValueError: if the last step is not a predictor yet predict is used
+        """
+        last = self.steps[-1][1]
+        if not hasattr(last, "predict"):
+            raise ValueError("Last step must support predict")
+
+        processed = data
+
+        for name, transformer in self.steps[:-1]:
+            processed = transformer.transform(processed)
+
+        return last.predict(processed)
+
 
 
 class FeatureUnion:
