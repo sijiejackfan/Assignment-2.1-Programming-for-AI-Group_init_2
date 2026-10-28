@@ -95,4 +95,18 @@ Users can sort numerical arrays, find the largest or smallest values, or search 
 
 ## Performance Comparisons
 
+The package uses a benchmarking script to compare Python loops with NumPy operations for calculating a mean, squaring array elements and calculating Euclidean distance. The tests used input sizes of 100, 1,000, 10,000 and 100,000 elements, with the median of five runs used for timing.
+
+The results showed that NumPy was faster than Python loops in all tested cases. For 100,000 elements, the results were:
+
+![benchmarking](assets/img10.png)
+
+These results show the performance benefits of NumPy vectorisation for the selected operations.
+
+To reproduce the benchmark results, run:
+
+python -m numcompute.benchmarking
+
+The results will also be saved in benchmark_results.csv.
+
 
