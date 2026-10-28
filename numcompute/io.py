@@ -12,10 +12,12 @@ import csv
 
 """
 Read csv file into numpy array using np.genfromtxt
-fileName: csv file name to read from
-delim: type of the delimiter
-dtype: type of the data
-skipheader: number of lines to skip, default 1
+Parameters:
+fileName: str, csv file name to read from
+delim: str, type of the delimiter (optional)
+Returns
+data : a 2D string array with shape (n_rows, n_columns). Missing values are kept as empty strings.
+columns : a string list containing names read from csv header
 missing values: kept as empty strings and can be handled later during preprocessing.
 Sources: https://numpy.org/devdocs/reference/generated/numpy.genfromtxt.html
 """
@@ -25,6 +27,20 @@ def load_csv(fileName, delim=","):
         data = np.genfromtxt(file, delimiter=delim, dtype=str, ndmin=2, autostrip=True)
     return data, columns
 
+"""
+Read csv file into numpy array using np.genfromtxt in chunks
+Parameters:
+fileName: str, csv file name to read from
+delim: str, type of the delimiter (optional)
+chunk_size: int, how large the chunk should be
+Returns
+data : a 2D string array with shape (n_rows, n_columns). Missing values are kept as empty strings.
+columns : a string list containing names read from csv header
+missing values: kept as empty strings and can be handled later during preprocessing.
+Raises
+TypeError: if chunk size is not integer
+ValueError: if chunk size is not positive
+"""
 def load_csv_chunks(fileName, delim=",", chunk_size=1000):
     if not isinstance(chunk_size, int):
         raise TypeError("chunk size must be integer")
