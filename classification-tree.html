@@ -1,0 +1,1705 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classification Trees</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* ---------------------------------------------------------------- tokens
+     Same light world as the Week 6 pages — projected in a lit room, so it does
+     not follow the viewer's dark mode, and every colour is painted explicitly.
+     c0/c1 are the two classes (failed / passed) and are used for nothing else;
+     sage marks the gain and the winning question, flame marks a trap. */
+  :root {
+    --paper:#eceff4; --surface:#f8fafc; --surface-2:#e0e6ee;
+    --ink:#141c28; --ink-soft:#55627a; --ink-faint:#8b97ab;
+    --line:#ccd4e0; --line-soft:#dde3ec;
+    --c0:#2b55d4; --c0-soft:#dbe3fb; --c0-wash:#eaeffc;
+    --c1:#a8570b; --c1-soft:#fbeacf; --c1-wash:#fdf4e4;
+    --sage:#1a7a5e; --sage-soft:#d3ece3;
+    --flame:#cf4320; --flame-soft:#fadfd6;
+    --shadow:0 1px 2px rgba(20,28,40,.06), 0 6px 18px rgba(20,28,40,.05);
+    --r:6px;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding-block:26px 48px; padding-left:20px; padding-right:20px;
+    background:var(--paper); color:var(--ink);
+    font-family:Archivo,"Helvetica Neue",Arial,sans-serif;
+    font-size:16.5px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:1800px; margin:0 auto; }
+  .mono, code { font-family:"IBM Plex Mono","SF Mono",Menlo,Consolas,monospace; }
+  code { font-size:.92em; }
+
+  header { margin-bottom:18px; }
+  .eyebrow {
+    font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:500;
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); margin:0 0 6px;
+  }
+  h1 {
+    font-size:clamp(28.5px,5vw,42px); font-weight:800; letter-spacing:-.025em;
+    line-height:1.08; text-wrap:balance; margin:0 0 10px;
+  }
+  .lede { margin:0; max-width:70ch; color:var(--ink-soft); }
+  .lede b { color:var(--ink); font-weight:600; }
+
+  /* ---------------------------------------------------------------- tabs */
+  .tabs { display:flex; flex-wrap:wrap; gap:6px; border-bottom:2px solid var(--line); margin-bottom:22px; }
+  .tabs button {
+    font-family:Archivo,sans-serif; font-size:16.5px; font-weight:600;
+    color:var(--ink-soft); background:none; border:0; border-bottom:3px solid transparent;
+    margin-bottom:-2px; padding:9px 14px; cursor:pointer;
+    display:flex; align-items:baseline; gap:9px; transition:color .12s,border-color .12s;
+  }
+  .tabs button span {
+    font-family:"IBM Plex Mono",monospace; font-size:11.5px; font-weight:600;
+    letter-spacing:.09em; color:var(--ink-faint); white-space:nowrap;
+  }
+  .tabs button:hover { color:var(--ink); }
+  .tabs button[aria-selected="true"] { color:var(--ink); border-bottom-color:var(--c0); }
+  .tabs button[aria-selected="true"] span { color:var(--c0); }
+  .tabs button:focus-visible { outline:2px solid var(--c0); outline-offset:-3px; }
+
+  /* ---------------------------------------------------------------- steps */
+  .step { margin-bottom:30px; }
+  .stephead { display:grid; grid-template-columns:40px minmax(0,1fr); gap:0 14px; margin-bottom:14px; }
+  .stephead > h2, .stephead > p { grid-column:2; }
+  .stephead .num {
+    grid-row:1/-1; font-family:"IBM Plex Mono",monospace; font-size:14.5px; font-weight:600;
+    color:var(--c0); padding-top:5px; border-top:2px solid var(--c0);
+  }
+  .stephead h2 { margin:0; font-size:22px; font-weight:600; letter-spacing:-.015em; text-wrap:balance; padding-top:2px; }
+  .stephead p { margin:5px 0 0; color:var(--ink-soft); max-width:72ch; font-size:16px; }
+  .stephead p b { color:var(--ink); font-weight:600; }
+
+  .split { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:14px; align-items:start; }
+  .split.even { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+  .split.treewide { grid-template-columns:minmax(0,1.45fr) minmax(0,1fr); }
+  .stack { display:grid; gap:14px; }
+
+  .card {
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--r); box-shadow:var(--shadow); overflow:hidden;
+  }
+  .card .body { padding:14px 15px 15px; }
+
+  canvas { display:block; width:100%; height:372px; }
+  canvas.gain { height:400px; cursor:pointer; }
+  canvas.short { height:240px; }
+
+  /* ---------------------------------------------------------------- code */
+  .cellhead, .outhead {
+    font-family:"IBM Plex Mono",monospace; font-size:11.5px; font-weight:600;
+    letter-spacing:.12em; text-transform:uppercase; color:var(--ink-faint);
+    padding:10px 15px; border-bottom:1px solid var(--line-soft);
+  }
+  .outhead {
+    border-top:1px solid var(--line-soft); border-bottom:0;
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+  }
+  .outhead .live {
+    font-size:10.5px; letter-spacing:.1em; color:var(--c0);
+    background:var(--c0-soft); padding:2px 6px; border-radius:3px;
+  }
+  pre.src, pre.out {
+    margin:0; padding:12px 15px; font-family:"IBM Plex Mono",monospace;
+    font-size:14px; line-height:1.8; overflow-x:auto; white-space:pre;
+    font-variant-numeric:tabular-nums;
+  }
+  pre.src.full { font-size:13.5px; line-height:1.72; }
+  pre.out { background:var(--surface-2); font-size:13px; line-height:1.75; }
+  .kw { color:var(--c0); font-weight:600; }
+  .fn { font-weight:600; }
+  .cm { color:var(--ink-faint); }
+  .st { color:var(--sage); }
+
+  /* ---------------------------------------------------------------- formula */
+  .formula {
+    margin:0 0 14px; padding:14px 15px 15px; text-align:center;
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+    font-family:"IBM Plex Mono",monospace; font-size:16px; line-height:2.1;
+    overflow-x:auto;
+  }
+  .formula .frac { display:inline-block; vertical-align:-.62em; text-align:center; margin:0 .2em; }
+  .formula .frac > span { display:block; padding:0 .35em; line-height:1.5; }
+  .formula .frac .den { border-top:1.5px solid currentColor; }
+  .formula .I { color:var(--sage); font-weight:600; }
+  .formula .gn { background:var(--sage-soft); color:#0f3f2f; font-weight:600; padding:1px 7px; border-radius:3px; }
+  .formula .ln2 { display:block; font-size:14.5px; color:var(--ink-soft); }
+  .idefs { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin:8px 0 4px; line-height:1.4; }
+  .idefs span {
+    font-size:14.5px; padding:7px 13px; border-radius:5px;
+    background:var(--sage-soft); border:1.5px solid var(--sage); color:#0f3f2f;
+  }
+  .idefs span b { color:var(--sage); }
+  .formula .fnote {
+    display:block; max-width:78ch; margin:8px auto 0; text-align:center;
+    font-family:Archivo,sans-serif; font-size:14.5px; line-height:1.55; color:var(--ink-soft);
+  }
+  .formula .fnote b { color:var(--ink); font-weight:600; }
+
+  /* ---------------------------------------------------------------- controls */
+  .ctl { display:flex; flex-wrap:wrap; align-items:center; gap:9px 14px; padding:12px 15px; border-top:1px solid var(--line-soft); }
+  .ctl.top { border-top:0; }
+  .slider { display:flex; align-items:center; gap:8px; font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--ink-soft); white-space:nowrap; }
+  .slider b { color:var(--ink); font-weight:600; min-width:1.2em; display:inline-block; }
+  input[type="range"] { width:96px; accent-color:var(--c0); }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:5px; overflow:hidden; }
+  .seg button {
+    font-family:"IBM Plex Mono",monospace; font-size:13px; font-weight:500;
+    padding:6px 12px; border:0; border-right:1px solid var(--line);
+    background:var(--surface); color:var(--ink-soft); cursor:pointer;
+  }
+  .seg button:last-child { border-right:0; }
+  .seg button:hover { background:var(--surface-2); }
+  .seg button[aria-pressed="true"] { background:var(--c0); color:#fff; }
+  .seg button:focus-visible { outline:2px solid var(--c0); outline-offset:-2px; }
+  button.plain {
+    font-family:Archivo,sans-serif; font-size:14.5px; font-weight:500; color:var(--ink);
+    background:var(--surface); border:1px solid var(--line); border-radius:5px;
+    padding:6px 12px; cursor:pointer;
+  }
+  button.plain:hover:not(:disabled) { background:var(--surface-2); }
+  button.plain:disabled { opacity:.42; cursor:not-allowed; }
+  button.go { background:var(--c0); border-color:var(--c0); color:#fff; }
+  button.go:hover:not(:disabled) { filter:brightness(1.1); background:var(--c0); }
+  button.plain:focus-visible, input:focus-visible { outline:2px solid var(--c0); outline-offset:2px; }
+  .ctlabel { font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--ink-soft); }
+  .ctl .sep { width:1px; align-self:stretch; background:var(--line-soft); }
+
+  .legend {
+    display:flex; flex-wrap:wrap; gap:5px 15px; padding:10px 15px;
+    border-top:1px solid var(--line-soft); font-family:"IBM Plex Mono",monospace;
+    font-size:12px; color:var(--ink-soft);
+  }
+  .legend span { display:inline-flex; align-items:center; gap:6px; }
+  .legend i { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .legend i.sq { border-radius:2px; width:14px; height:10px; }
+  .legend i.ln { width:16px; height:0; border-radius:0; border-top:2.5px solid; }
+  .legend i.ln.dash { border-top-style:dashed; }
+
+  .verdict { margin:0; padding:11px 15px; border-top:1px solid var(--line-soft); font-size:15px; line-height:1.5; color:var(--ink-soft); }
+  .verdict b { color:var(--ink); font-weight:600; }
+  .verdict.good { background:var(--sage-soft); color:#14543f; }
+  .verdict.good b { color:#0f3f2f; }
+  .verdict.warn { background:var(--flame-soft); color:#8a2c13; }
+  .verdict.warn b { color:#6d2210; }
+
+  /* ---------------------------------------------------------------- tables */
+  table.t, table.data { width:100%; border-collapse:collapse; font-family:"IBM Plex Mono",monospace; font-size:12.5px; font-variant-numeric:tabular-nums; }
+  table.t th, table.data th {
+    text-align:left; font-weight:600; font-size:11px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--ink-faint);
+    padding:0 9px 5px 0; border-bottom:1px solid var(--line-soft); white-space:nowrap;
+  }
+  table.t td, table.data td { padding:3.5px 9px 3.5px 0; border-bottom:1px solid var(--line-soft); white-space:nowrap; }
+  table.t tr:last-child td, table.data tr:last-child td { border-bottom:0; }
+  table.t tr.best td { background:var(--sage-soft); font-weight:600; }
+  table.t td.r, table.t th.r { text-align:right; padding-right:0; }
+  table.data td.id { color:var(--ink-faint); }
+  table.data td.y1 { font-weight:600; }
+  table.data td.y0 { color:var(--ink-faint); }
+  table.data td.lab0 { color:var(--c0); font-weight:600; }
+  table.data td.lab1 { color:var(--c1); font-weight:600; }
+  table.data tr.inside td { background:var(--sage-soft); }
+
+  /* ---------------------------------------------------------------- notes */
+  .note {
+    margin:16px 0 0; padding:15px 18px;
+    background:var(--sage-soft); border:1px solid #bfdfd3; border-left:3px solid var(--sage);
+    border-radius:var(--r); color:#10402f; font-size:15.5px; line-height:1.55;
+  }
+  .note b { color:#0b2e22; font-weight:600; }
+  .note p { margin:9px 0 0; max-width:86ch; }
+  .note p:first-of-type { margin-top:0; }
+  .note .tag {
+    display:block; font-family:"IBM Plex Mono",monospace; font-size:11.5px; font-weight:600;
+    letter-spacing:.13em; text-transform:uppercase; color:var(--sage); margin-bottom:7px;
+  }
+  .note code { font-size:14px; background:rgba(255,255,255,.66); border-radius:3px; padding:1px 4px; }
+  .note .small { font-size:14px; color:#2d5c4b; }
+
+  /* the four-step outline, used in tab 01 and lit up step by step in tab 04 */
+  ol.flow { display:flex; flex-wrap:wrap; align-items:center; gap:8px 0; margin:12px 0 4px; padding:0; list-style:none; }
+  ol.flow li {
+    font-family:"IBM Plex Mono",monospace; font-size:13.5px; color:var(--ink-soft);
+    padding:8px 12px; border:1.5px solid var(--line); border-radius:5px; background:var(--surface);
+    transition:background .15s, border-color .15s;
+  }
+  ol.flow li b { color:var(--ink); font-weight:600; }
+  ol.flow li + li { margin-left:26px; position:relative; }
+  ol.flow li + li::before {
+    content:"→"; position:absolute; left:-20px; top:50%; transform:translateY(-50%);
+    color:var(--ink-faint); font-size:15px;
+  }
+  ol.flow li.on { background:var(--c0-soft); border-color:var(--c0); color:var(--ink); }
+  ol.flow li.leaf.on { background:var(--surface-2); border-color:var(--ink); }
+
+  /* ---------------------------------------------------------------- tab 01 */
+  .qrow { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px 12px; padding:9px 0; border-bottom:1px solid var(--line-soft); }
+  .qrow:first-child { padding-top:0; }
+  .qrow:last-child { border-bottom:0; padding-bottom:0; }
+  .qname { font-family:"IBM Plex Mono",monospace; font-size:14.5px; font-weight:600; }
+  .qname em { font-style:normal; font-weight:400; font-size:12px; color:var(--ink-faint); margin-left:8px; }
+
+  /* ---------------------------------------------------------------- tab 02 */
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chips button {
+    width:37px; height:37px; border-radius:5px; cursor:pointer;
+    font-family:"IBM Plex Mono",monospace; font-size:15.5px; font-weight:600;
+    border:1px solid transparent;
+  }
+  .chips button.k0 { background:var(--c0-soft); color:var(--c0); border-color:var(--c0); }
+  .chips button.k1 { background:var(--c1-soft); color:var(--c1); border-color:var(--c1); }
+  .chips button:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+
+  /* a strip of students: colour = result, number = which student */
+  .strip { display:flex; flex-wrap:wrap; gap:3px; }
+  .strip i {
+    min-width:24px; height:24px; line-height:24px; text-align:center; border-radius:4px; padding:0 3px;
+    font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:600; font-style:normal;
+  }
+  .strip i.s0 { background:var(--c0-soft); color:var(--c0); }
+  .strip i.s1 { background:var(--c1-soft); color:var(--c1); }
+  .strip i.sT { background:var(--sage-soft); color:var(--sage); }
+  .strip i.sF { background:var(--surface-2); color:var(--ink-faint); }
+  .striphead {
+    margin:0 0 5px; font-family:"IBM Plex Mono",monospace; font-size:11.5px;
+    letter-spacing:.07em; text-transform:uppercase; color:var(--ink-faint);
+  }
+  .striphead b { color:var(--ink); font-weight:600; }
+  .strip + .striphead, .bars + .striphead, .pbar + .striphead, ol.stops + .striphead, .drop + .striphead { margin-top:14px; }
+
+  /* horizontal bars: gains, counts, impurity meters */
+  .bars { display:grid; gap:6px; }
+  .bars .row {
+    display:grid; grid-template-columns:8.2em minmax(0,1fr) 4.6em; align-items:center; gap:10px;
+    font-family:"IBM Plex Mono",monospace; font-size:13px;
+  }
+  .bars .q { color:var(--ink); white-space:nowrap; }
+  .bars .track { position:relative; height:19px; background:var(--surface-2); border-radius:3px; overflow:hidden; }
+  .bars .track i { position:absolute; left:0; top:0; bottom:0; background:var(--sage-soft); border-right:2px solid var(--sage); }
+  .bars .v { text-align:right; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+  .bars .row.win .track i { background:var(--sage); }
+  .bars .row.win .q, .bars .row.win .v { color:var(--sage); font-weight:600; }
+  .bars .row.c0 .track i { background:var(--c0-soft); border-right-color:var(--c0); }
+  .bars .row.c1 .track i { background:var(--c1-soft); border-right-color:var(--c1); }
+  .bars .row.ink .track i { background:#c4ccd9; border-right-color:var(--ink-soft); }
+  .bars .row.skip { opacity:.45; }
+
+  /* p as one stacked bar */
+  .pbar { display:flex; height:26px; border-radius:4px; overflow:hidden; font-family:"IBM Plex Mono",monospace; font-size:12.5px; font-weight:600; }
+  .pbar i { font-style:normal; display:flex; align-items:center; justify-content:center; }
+  .pbar .p0 { background:var(--c0-soft); color:var(--c0); }
+  .pbar .p1 { background:var(--c1-soft); color:var(--c1); }
+
+  /* before → after → gain as one bar: the whole bar is the impurity before */
+  .drop .dtrack { position:relative; height:26px; border-radius:4px; background:var(--surface-2); overflow:hidden; }
+  .drop .da { position:absolute; left:0; top:0; bottom:0; background:var(--c0-soft); border-right:2px solid var(--c0); }
+  .drop .dg {
+    position:absolute; top:0; bottom:0; right:0;
+    background:repeating-linear-gradient(135deg, var(--sage-soft) 0 6px, #bfe0d3 6px 12px);
+  }
+  .drop .dlab { display:flex; justify-content:space-between; gap:10px; font-family:"IBM Plex Mono",monospace; font-size:12.5px; margin-top:5px; color:var(--c0); }
+  .drop .dlab .g { color:var(--sage); font-weight:600; }
+
+  /* the stop rules, checked in order */
+  ol.stops { margin:0; padding:0; list-style:none; display:grid; gap:4px; }
+  ol.stops li {
+    display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:12px; align-items:center;
+    padding:6px 10px; border-radius:4px; background:var(--surface-2); font-size:14.5px; color:var(--ink-soft);
+    border-left:3px solid transparent;
+  }
+  ol.stops li .a { font-family:"IBM Plex Mono",monospace; font-size:12.5px; white-space:nowrap; }
+  ol.stops li .s {
+    font-family:"IBM Plex Mono",monospace; font-size:11px; font-weight:600; letter-spacing:.07em;
+    text-transform:uppercase; padding:2px 7px; border-radius:3px; min-width:5.4em; text-align:center;
+  }
+  ol.stops li.no .s { color:var(--ink-faint); }
+  ol.stops li.stop { background:var(--surface); border-left-color:var(--ink); color:var(--ink); }
+  ol.stops li.stop .s { background:var(--ink); color:#fff; }
+  ol.stops li.go { background:var(--sage-soft); border-left-color:var(--sage); color:#10402f; }
+  ol.stops li.go .s { background:var(--sage); color:#fff; }
+  ol.stops li.skip, ol.stops li.wait { opacity:.42; }
+  .hint { margin:0; font-size:15px; color:var(--ink-soft); }
+  .hint b { color:var(--ink); }
+
+  /* ---------------------------------------------------------------- the tree */
+  .treewrap { padding:10px 10px 12px; overflow-x:auto; }
+  .treewrap svg, .vis svg { display:block; margin:0 auto; }
+  .tnode-q { fill:var(--surface); stroke:var(--line); stroke-width:1.5; }
+  .tnode-q.on { stroke:var(--c0); stroke-width:3; }
+  .tnode-0 { fill:var(--c0-soft); stroke:var(--c0); stroke-width:1.5; }
+  .tnode-1 { fill:var(--c1-soft); stroke:var(--c1); stroke-width:1.5; }
+  .tnode-0.on, .tnode-1.on { stroke-width:3.5; }
+  .tnode-0.memo, .tnode-1.memo { stroke:var(--flame); stroke-width:2.6; stroke-dasharray:6 3; }
+  .tnode-pend { fill:var(--surface-2); stroke:var(--ink-faint); stroke-width:1.5; stroke-dasharray:4 3; }
+  .tnode-pend.next { stroke:var(--c0); stroke-width:2.4; }
+  .tedge { stroke:var(--line); stroke-width:1.5; fill:none; }
+  .tedge.on { stroke:var(--c0); stroke-width:3; }
+  .ttext { font-family:"IBM Plex Mono",monospace; font-size:13px; font-weight:600; fill:var(--ink); }
+  .ttext.lab0 { fill:var(--c0); } .ttext.lab1 { fill:var(--c1); }
+  .tmeta { font-family:"IBM Plex Mono",monospace; font-size:10.5px; fill:var(--ink-faint); }
+  .twhy { font-family:"IBM Plex Mono",monospace; font-size:10.5px; fill:var(--ink-soft); }
+  .twhy.memo { fill:var(--flame); font-weight:600; }
+  .tbranch { font-family:"IBM Plex Mono",monospace; font-size:11px; fill:var(--ink-faint); }
+  .torder { font-family:"IBM Plex Mono",monospace; font-size:10.5px; font-weight:600; fill:var(--c0); }
+  .truler { font-family:"IBM Plex Mono",monospace; font-size:11px; fill:var(--ink-faint); }
+  .tcut { stroke:var(--flame); stroke-width:1.6; stroke-dasharray:7 4; }
+  .tcutlab { font-family:"IBM Plex Mono",monospace; font-size:11px; fill:var(--flame); font-weight:600; }
+
+  /* ---------------------------------------------------------------- tab 05 */
+  .wt { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:14px; align-items:start; }
+  pre.wtcode { padding:12px 0; }
+  pre.wtcode .rg {
+    display:block; cursor:pointer; padding:2px 15px 2px 12px;
+    border-left:3px solid transparent; transition:background .1s, border-color .1s;
+  }
+  pre.wtcode .rg:hover { background:var(--c0-wash); }
+  pre.wtcode .rg.on { background:var(--c0-soft); border-left-color:var(--c0); }
+  pre.wtcode .rg:focus-visible { outline:2px solid var(--c0); outline-offset:-2px; }
+  .wtnote { position:sticky; top:14px; }
+  .wtnote h3 { margin:0 0 6px; font-size:18px; font-weight:600; letter-spacing:-.01em; }
+  .wtnote .tagline {
+    font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--c0);
+    letter-spacing:.06em; text-transform:uppercase; margin:0 0 6px;
+  }
+  .wtnote p { margin:0 0 7px; font-size:15px; line-height:1.55; color:var(--ink-soft); }
+  .wtnote p b { color:var(--ink); font-weight:600; }
+  .wtnote code { font-size:.9em; background:var(--surface-2); padding:1px 4px; border-radius:3px; }
+  .wtnote .vis { margin:12px 0 0; padding:13px 14px; border:1px solid var(--line-soft); border-radius:5px; background:#fff; }
+  .wtnote .vis .cap { margin:8px 0 0; font-size:13.5px; color:var(--ink-soft); }
+  .wtnote .vis .striphead { margin:0 0 5px; font-size:11.5px; line-height:1.4; color:var(--ink-faint); }
+  .wtnote .vis .strip + .striphead, .wtnote .vis .bars + .striphead,
+  .wtnote .vis .pbar + .striphead { margin-top:14px; }
+  .wtnote .watch {
+    margin:0; padding:10px 15px; font-size:14.5px; line-height:1.5;
+    background:var(--flame-soft); color:#8a2c13; border-top:1px solid var(--line-soft);
+  }
+  .wtnote .watch b { color:#6d2210; }
+  .wtnote .livebox {
+    margin:10px 0 0; padding:9px 11px; border-radius:4px;
+    background:var(--surface-2); font-family:"IBM Plex Mono",monospace;
+    font-size:12.5px; line-height:1.7; white-space:pre-wrap; word-break:break-word;
+    font-variant-numeric:tabular-nums; color:var(--ink);
+  }
+  .wtnote .livebox em { font-style:normal; color:var(--ink-faint); }
+  .wthint {
+    padding:9px 15px; border-top:1px solid var(--line-soft);
+    font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.05em; color:var(--ink-faint);
+  }
+  .kvs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+  .kvs span { font-family:"IBM Plex Mono",monospace; font-size:12.5px; font-weight:600; padding:3px 8px; border-radius:3px; background:var(--c0-soft); color:var(--c0); }
+  /* the data matrix X and the labels y, as cells */
+  .xg { display:inline-grid; grid-template-columns:repeat(3,34px) 14px 34px; gap:3px; font-family:"IBM Plex Mono",monospace; font-size:12.5px; }
+  .xg span { height:21px; line-height:21px; text-align:center; border-radius:3px; }
+  .xg .xh { color:var(--ink-faint); font-size:11px; }
+  .xg .x1 { background:#cfd7e3; color:var(--ink); font-weight:600; }
+  .xg .x0 { background:var(--surface-2); color:var(--ink-faint); }
+  .xg .y0 { background:var(--c0-soft); color:var(--c0); font-weight:600; }
+  .xg .y1 { background:var(--c1-soft); color:var(--c1); font-weight:600; }
+  .xwrap { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start; }
+  .xwrap .cap { margin:0; max-width:24ch; }
+
+  .foot { margin-top:40px; padding-top:18px; border-top:1px solid var(--line); font-size:14.5px; color:var(--ink-faint); }
+
+  @media (max-width:900px) {
+    .split, .split.even, .split.treewide, .wt { grid-template-columns:minmax(0,1fr); }
+    .wtnote { position:static; }
+    canvas { height:300px; }
+    canvas.gain { height:340px; }
+    .stephead { grid-template-columns:30px minmax(0,1fr); gap:0 10px; }
+  }
+  @media (max-width:760px) {
+    .tabs button { font-size:15px; padding:8px 10px; }
+    .tabs button span { display:none; }
+    ol.flow li + li { margin-left:0; }
+    ol.flow li + li::before { display:none; }
+    ol.flow { gap:6px; }
+  }
+  @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Week 10 · Models · classification trees</p>
+    <h1>Classification Trees</h1>
+    <p class="lede">
+      <b>Twelve students, three yes/no answers each, and one question: did they pass?</b>
+      Every feature is yes or no, so every question the tree can ask has the same shape,
+      <code>feature == yes ?</code>. Tab 01 uses a finished tree, tabs 02 to 04 build one,
+      and tab 05 is the code.
+    </p>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-1" aria-selected="true"  aria-controls="p-1">The idea <span>01</span></button>
+    <button role="tab" id="tab-2" aria-selected="false" aria-controls="p-2">Impurity <span>02</span></button>
+    <button role="tab" id="tab-3" aria-selected="false" aria-controls="p-3">Information gain <span>03</span></button>
+    <button role="tab" id="tab-4" aria-selected="false" aria-controls="p-4">Build the tree <span>04</span></button>
+    <button role="tab" id="tab-5" aria-selected="false" aria-controls="p-5">The code <span>05</span></button>
+  </div>
+
+  <!-- ================================================================= 1 -->
+  <section id="p-1" role="tabpanel" aria-labelledby="tab-1">
+    <div class="step">
+      <div class="stephead">
+        <span class="num">01</span>
+        <h2>A tree is a few yes/no questions, asked in order</h2>
+        <p>
+          <b>Describe a student on the right and follow the lit path.</b> Each answer picks a
+          branch. When the questions run out, the box you land in is the prediction.
+        </p>
+      </div>
+
+      <div class="split treewide">
+        <div class="card">
+          <div class="cellhead">the trained tree</div>
+          <div class="treewrap" id="idea-tree"></div>
+        </div>
+        <div class="card">
+          <div class="cellhead">describe a student</div>
+          <div class="body" id="idea-controls"></div>
+          <div class="outhead">the walk <span class="live">live</span></div>
+          <pre class="out" id="idea-walk"></pre>
+          <p class="verdict" id="v-idea"></p>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="cellhead">the twelve training students &mdash; green rows ended in the same leaf as yours</div>
+        <div class="body" style="overflow-x:auto"><table class="data" id="idea-data"></table></div>
+      </div>
+
+      <div class="note">
+        <span class="tag">where did the questions come from?</span>
+        <p><b>Nobody wrote them.</b> The algorithm picked them from the twelve students, by repeating four steps:</p>
+        <ol class="flow">
+          <li><b>try</b> every question</li>
+          <li><b>keep</b> the one with the biggest gain</li>
+          <li><b>split</b>, and repeat on each side</li>
+          <li><b>stop</b> when a rule says so</li>
+        </ol>
+        <p>"Biggest gain" needs a number for how mixed a group is. That is tab 02 (impurity) and
+          tab 03 (gain). Tab 04 runs all four steps.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================= 2 -->
+  <section id="p-2" role="tabpanel" aria-labelledby="tab-2" hidden>
+    <div class="step">
+      <div class="stephead">
+        <span class="num">02</span>
+        <h2>Impurity: one number for how mixed a group is</h2>
+        <p>
+          <b>Click a chip to flip a student</b> (0 = failed, 1 = passed). Gini and entropy are
+          two rulers for the same thing: <b>0 when everyone agrees, highest at half and half.</b>
+        </p>
+      </div>
+
+      <div class="split even">
+        <div class="card">
+          <div class="cellhead">a group of results &mdash; click a chip to flip it</div>
+          <div class="body"><div class="chips" id="chips"></div></div>
+          <div class="ctl">
+            <button class="plain" id="chip-add">add a student</button>
+            <button class="plain" id="chip-del">remove one</button>
+            <span class="ctlabel" id="chip-n"></span>
+          </div>
+          <div class="outhead">both rulers, worked through <span class="live">live</span></div>
+          <pre class="out" id="chip-work"></pre>
+        </div>
+        <div class="card">
+          <canvas id="c-imp"></canvas>
+          <div class="legend">
+            <span><i class="ln" style="border-top-color:var(--c0)"></i> Gini &nbsp;1 &minus; &Sigma;p&sup2;</span>
+            <span><i class="ln dash" style="border-top-color:var(--c1)"></i> entropy &nbsp;&minus;&Sigma;p&middot;log&#8322;p</span>
+            <span><i style="background:var(--sage)"></i> your group</span>
+          </div>
+          <p class="verdict" id="v-imp"></p>
+        </div>
+      </div>
+
+      <div class="note">
+        <span class="tag">Gini or entropy? either one</span>
+        <p><b>Same shape, different scale.</b> Gini tops out at 0.5, entropy at 1 bit. On these
+          twelve students they pick the same question at every node.</p>
+        <p><b>What matters is which way it moves.</b> A good question splits a group into
+          groups with <b>lower</b> impurity. How much lower is the information gain, in tab 03.</p>
+        <p class="small">Some books, and scikit-learn's <code>log_loss</code> option, call this
+          entropy <em>cross-entropy</em>. At a tree node it is the same number.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================= 3 -->
+  <section id="p-3" role="tabpanel" aria-labelledby="tab-3" hidden>
+    <div class="step">
+      <div class="stephead">
+        <span class="num">03</span>
+        <h2>Information gain: how much one question lowers the impurity</h2>
+        <p>
+          <b>Each column is one question.</b> The dashed line is the impurity before asking, the
+          blue bar is what is left after, and <b>the green gap is the gain</b>. The biggest gap
+          wins. Switch the ruler: the numbers change, the winner does not.
+        </p>
+      </div>
+
+      <div class="formula">
+        <span class="gn">gain</span> &nbsp;=&nbsp; <span class="I">I</span>(before) &nbsp;&minus;&nbsp; <span class="I">I</span>(after)
+        <span class="ln2">
+          <span class="I">I</span>(after) =
+          <span class="frac"><span>n<sub>yes</sub></span><span class="den">n</span></span>&middot;<span class="I">I</span>(yes side)
+          &nbsp;+&nbsp;
+          <span class="frac"><span>n<sub>no</sub></span><span class="den">n</span></span>&middot;<span class="I">I</span>(no side)
+        </span>
+        <span class="idefs">
+          <span><b>I</b> = Gini &nbsp; 1 &minus; &Sigma;p&sup2;</span>
+          <span><b>I</b> = entropy (cross-entropy) &nbsp; &minus;&Sigma;p&middot;log&#8322;p</span>
+        </span>
+        <span class="fnote">
+          <b>I is the "information" in information gain.</b> Pick either ruler; the rule stays
+          the same: the bigger the drop, the higher the gain. The weights let the bigger side
+          count for more.
+        </span>
+      </div>
+
+      <div class="split">
+        <div class="card">
+          <canvas id="c-gain" class="gain"></canvas>
+          <div class="ctl">
+            <span class="ctlabel">ruler</span><span class="seg" id="g-crit"></span>
+            <span class="ctlabel">question</span><span class="seg" id="g-q"></span>
+          </div>
+          <div class="legend">
+            <span><i class="ln dash" style="border-top-color:var(--ink)"></i> before asking</span>
+            <span><i class="sq" style="background:var(--c0-soft); border:1.5px solid var(--c0)"></i> after (weighted)</span>
+            <span><i class="sq" style="background:var(--sage)"></i> gain</span>
+          </div>
+        </div>
+        <div class="stack">
+          <div class="card">
+            <div class="cellhead" id="g-head">what this question does</div>
+            <div class="body" id="g-sides"></div>
+            <div class="outhead">the gain, worked through <span class="live">live</span></div>
+            <pre class="out" id="g-work"></pre>
+            <p class="verdict" id="v-gain"></p>
+          </div>
+          <div class="card">
+            <div class="cellhead">both rulers, side by side</div>
+            <div class="body" style="padding-top:6px"><table class="t" id="g-cmp"></table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================= 4 -->
+  <section id="p-4" role="tabpanel" aria-labelledby="tab-4" hidden>
+    <div class="step">
+      <div class="stephead">
+        <span class="num">04</span>
+        <h2>Build the tree: search, split, repeat, stop</h2>
+        <p>
+          <b>Press step.</b> Each press is one call to <code>_build</code>. It checks the stop
+          rules first. If none fires, it tries all three questions, keeps the biggest gain, and
+          calls itself on each side.
+        </p>
+      </div>
+
+      <ol class="flow" id="b-flow" style="margin:0 0 14px">
+        <li data-k="try"><b>try</b> every question</li>
+        <li data-k="keep"><b>keep</b> the biggest gain</li>
+        <li data-k="split"><b>split</b>, and repeat on each side</li>
+        <li data-k="leaf" class="leaf"><b>stop</b>: make a leaf</li>
+      </ol>
+
+      <div class="card">
+        <div class="ctl top">
+          <button class="plain go" id="b-step">step</button>
+          <button class="plain" id="b-all">build it all</button>
+          <button class="plain" id="b-reset">reset</button>
+          <span class="sep"></span>
+          <label class="slider">max_depth <input type="range" id="s-d" min="1" max="3" value="2"><b id="o-d">2</b></label>
+          <span class="ctlabel">ruler</span><span class="seg" id="b-crit"></span>
+        </div>
+      </div>
+
+      <div class="split treewide" style="margin-top:14px">
+        <div class="card">
+          <div class="cellhead">the tree so far &mdash; dashed boxes are calls still waiting</div>
+          <div class="treewrap" id="b-tree"></div>
+          <p class="verdict" id="v-b"></p>
+        </div>
+        <div class="stack">
+          <div class="card">
+            <div class="cellhead" id="b-head">this call</div>
+            <div class="body" id="b-call"></div>
+          </div>
+          <div class="card">
+            <div class="cellhead">why stop at all? accuracy as the tree gets deeper</div>
+            <canvas id="c-fit" class="short"></canvas>
+            <div class="legend">
+              <span><i class="ln" style="border-top-color:var(--c0)"></i> the 12 training students</span>
+              <span><i class="ln" style="border-top-color:var(--c1)"></i> 400 new students</span>
+              <span><i class="ln dash" style="border-top-color:var(--ink-faint)"></i> always say FAIL</span>
+            </div>
+            <p class="verdict" id="v-fit"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================= 5 -->
+  <section id="p-5" role="tabpanel" aria-labelledby="tab-5" hidden>
+    <div class="step">
+      <div class="stephead">
+        <span class="num">05</span>
+        <h2>The code, for yes/no features</h2>
+        <p>
+          <b>Click a block on the left.</b> The right side shows what that block does to the
+          twelve students. Yes is stored as 1 and no as 0, so every question is
+          <code>X[:, f] == 1</code>.
+        </p>
+      </div>
+
+      <div class="wt">
+        <div class="card">
+          <div class="cellhead">a classification tree for 0/1 features, in full</div>
+          <pre class="src full wtcode" id="src-code"></pre>
+          <div class="wthint">click any block &mdash; the picture on the right follows it</div>
+        </div>
+        <div class="card wtnote" id="codenote"></div>
+      </div>
+    </div>
+  </section>
+
+  <p class="foot">
+    Week 10 &middot; Programming for Artificial Intelligence &middot; twelve students, three
+    yes/no features. Every number on this page is computed in the browser from those twelve
+    rows, and the Python in tab 05 builds exactly the same tree.
+  </p>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var CSS = getComputedStyle(document.documentElement);
+  function tok(n) { return CSS.getPropertyValue(n).trim(); }
+  var C = {
+    ink: tok('--ink'), soft: tok('--ink-soft'), faint: tok('--ink-faint'),
+    line: tok('--line'), lsoft: tok('--line-soft'),
+    surf: tok('--surface'), surf2: tok('--surface-2'),
+    c0: tok('--c0'), c0s: tok('--c0-soft'), c0w: tok('--c0-wash'),
+    c1: tok('--c1'), c1s: tok('--c1-soft'),
+    sage: tok('--sage'), sageS: tok('--sage-soft'), flame: tok('--flame')
+  };
+  var MONO = '12px "IBM Plex Mono", monospace';
+  var MONOB = '600 13px "IBM Plex Mono", monospace';
+  function fmt(v, n) { return v.toFixed(n); }
+  function pct(v) { return Math.round(v * 100) + '%'; }
+  function padr(s, n) { s = String(s); while (s.length < n) s = s + ' '; return s; }
+  function el(id) { return document.getElementById(id); }
+
+  /* ---------------------------------------------------------- highlighter */
+  var KW = /\b(def|class|return|if|elif|else|for|in|not|and|or|None|True|False|import|from|while|continue|pass|as|lambda|is)\b/g;
+  function py(src) {
+    function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    return src.split('\n').map(function (line) {
+      var hash = -1, inStr = false, q = '';
+      for (var i = 0; i < line.length; i++) {
+        var ch = line[i];
+        if (inStr) { if (ch === q) inStr = false; }
+        else if (ch === '"' || ch === "'") { inStr = true; q = ch; }
+        else if (ch === '#') { hash = i; break; }
+      }
+      var code = hash >= 0 ? line.slice(0, hash) : line;
+      var cmt = hash >= 0 ? line.slice(hash) : '';
+      var strs = [];
+      var out = esc(code).replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, function (m) {
+        strs.push(m); return '@@S' + (strs.length - 1) + '@@';
+      });
+      out = out.replace(KW, '<span class="kw">$1</span>');
+      out = out.replace(/(<span class="kw">def<\/span> |<span class="kw">class<\/span> )(\w+)/g,
+                        '$1<span class="fn">$2</span>');
+      out = out.replace(/@@S(\d+)@@/g, function (_, i) {
+        return '<span class="st">' + strs[i] + '</span>';
+      });
+      if (cmt) out += '<span class="cm">' + esc(cmt) + '</span>';
+      return out;
+    }).join('\n');
+  }
+
+  /* ---------------------------------------------------------------- plot */
+  function Plot(id) {
+    var cv = el(id), ctx = cv.getContext('2d');
+    var P = { cv: cv, ctx: ctx, m: { l: 60, r: 16, t: 14, b: 34 } };
+    P.fit = function () {
+      var r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+      if (!r.width) return null;
+      cv.width = Math.round(r.width * d); cv.height = Math.round(r.height * d);
+      ctx.setTransform(d, 0, 0, d, 0, 0);
+      P.w = r.width; P.h = r.height; ctx.clearRect(0, 0, P.w, P.h);
+      return P;
+    };
+    P.domain = function (a, b, c, d) { P.x0 = a; P.x1 = b; P.y0 = c; P.y1 = d; return P; };
+    P.px = function (x) { return P.m.l + (x - P.x0) / (P.x1 - P.x0) * (P.w - P.m.l - P.m.r); };
+    P.py = function (y) { return P.h - P.m.b - (y - P.y0) / (P.y1 - P.y0) * (P.h - P.m.t - P.m.b); };
+    P.rect = function () { return { x: P.m.l, y: P.m.t, w: P.w - P.m.l - P.m.r, h: P.h - P.m.t - P.m.b }; };
+    P.clip = function () { var r = P.rect(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip(); };
+    P.grid = function (ticks, yl) {
+      ctx.font = MONO; ctx.lineWidth = 1; ctx.strokeStyle = C.lsoft;
+      ticks.forEach(function (y) {
+        ctx.beginPath(); ctx.moveTo(P.m.l, Math.round(P.py(y)) + .5);
+        ctx.lineTo(P.w - P.m.r, Math.round(P.py(y)) + .5); ctx.stroke();
+        ctx.fillStyle = C.faint; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+        ctx.fillText(yl(y), P.m.l - 7, P.py(y));
+      });
+      ctx.strokeStyle = C.line; ctx.beginPath();
+      ctx.moveTo(P.m.l + .5, P.m.t); ctx.lineTo(P.m.l + .5, P.h - P.m.b + .5);
+      ctx.lineTo(P.w - P.m.r, P.h - P.m.b + .5); ctx.stroke();
+      return P;
+    };
+    P.ylabel = function (t) {
+      ctx.font = MONO; ctx.fillStyle = C.soft;
+      ctx.save(); ctx.translate(4, P.m.t + 2); ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+      ctx.fillText(t, 0, 0); ctx.restore(); return P;
+    };
+    P.box = function (x, y, w, h, fill, stroke, sw) {
+      ctx.save(); ctx.fillStyle = fill; ctx.fillRect(x, y, w, h);
+      if (stroke) { ctx.lineWidth = sw || 1.5; ctx.strokeStyle = stroke; ctx.strokeRect(x, y, w, h); }
+      ctx.restore(); return P;
+    };
+    P.label = function (x, y, t, col, align, base, font) {
+      ctx.font = font || MONO; ctx.fillStyle = col;
+      ctx.textAlign = align || 'center'; ctx.textBaseline = base || 'middle';
+      ctx.fillText(t, x, y); return P;
+    };
+    P.path = function (pts, col, w, dash) {
+      ctx.save(); P.clip(); ctx.beginPath();
+      ctx.strokeStyle = col; ctx.lineWidth = w || 2;
+      if (dash) ctx.setLineDash(dash);
+      pts.forEach(function (p, i) {
+        var fx = P.px(p[0]), fy = P.py(p[1]);
+        if (i) ctx.lineTo(fx, fy); else ctx.moveTo(fx, fy);
+      });
+      ctx.stroke(); ctx.restore(); return P;
+    };
+    P.hline = function (x0, x1, y, col, w, dash) {
+      ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 1.5;
+      if (dash) ctx.setLineDash(dash);
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); ctx.restore(); return P;
+    };
+    P.dot = function (x, y, fill, r, ring) {
+      ctx.save(); ctx.beginPath(); ctx.arc(P.px(x), P.py(y), r, 0, 6.2832);
+      ctx.fillStyle = fill; ctx.fill();
+      if (ring) { ctx.lineWidth = 2; ctx.strokeStyle = ring; ctx.stroke(); }
+      ctx.restore(); return P;
+    };
+    return P;
+  }
+
+  /* ============================================================== the data
+     Twelve students, three yes/no features stored as 1/0, and whether they
+     passed. The rule underneath is "passed if they submitted AND attended";
+     student 5 is the exception — submitted, skipped class, was in a study
+     group, and passed anyway. A deep enough tree will learn that one student. */
+  var FEAT = ['submitted', 'attended', 'study_group'];
+  var CLASSNAME = ['failed', 'passed'];
+  var LABEL = ['FAIL', 'PASS'];
+  var YN = ['no', 'yes'];
+  var ROWS = [
+    [1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 0, 1], [1, 1, 0, 1],
+    [1, 0, 1, 1],
+    [1, 0, 0, 0], [1, 0, 0, 0],
+    [0, 1, 1, 0], [0, 1, 1, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 0]
+  ];
+  var PTS = ROWS.map(function (r, i) { return { v: r.slice(0, 3), c: r[3], i: i + 1 }; });
+  function cl(p) { return p.c; }
+  function ones(cs) { var k = 0; cs.forEach(function (c) { if (c === 1) k++; }); return k; }
+
+  /* ------------------------------------------------- the two rulers
+     Written the way the Python is: p from bincount, p0 first, then the sum. */
+  function imp(cs, crit) {
+    var n = cs.length; if (!n) return 0;
+    var n1 = ones(cs), p0 = (n - n1) / n, p1 = n1 / n;
+    if (crit === 'entropy') {
+      var e = 0;
+      if (p0 > 0) e += p0 * Math.log2(p0);
+      if (p1 > 0) e += p1 * Math.log2(p1);
+      return -e;
+    }
+    return 1 - (p0 * p0 + p1 * p1);
+  }
+  function critName(crit) { return crit === 'entropy' ? 'entropy' : 'gini'; }
+  /* np.bincount(y).argmax(): a tie goes to class 0 */
+  function majorityOf(cs) { var n1 = ones(cs); return n1 > cs.length - n1 ? 1 : 0; }
+  function pure(cs) { return cs.every(function (c) { return c === cs[0]; }); }
+
+  /* --------------------------------------------- information gain */
+  function gainOf(pts, f, crit) {
+    var L = pts.filter(function (p) { return p.v[f] === 1; });
+    var R = pts.filter(function (p) { return p.v[f] !== 1; });
+    var before = imp(pts.map(cl), crit);
+    if (!L.length || !R.length) return { f: f, L: L, R: R, before: before, skip: true, gain: 0 };
+    var gl = imp(L.map(cl), crit), gr = imp(R.map(cl), crit);
+    var after = (L.length * gl + R.length * gr) / pts.length;
+    return { f: f, L: L, R: R, before: before, gl: gl, gr: gr, after: after, gain: before - after };
+  }
+  /* the gain as shown: rounded before minus rounded after, so the arithmetic
+     printed beside it is arithmetic a reader can check */
+  function gShow(g) { return fmt(+fmt(g.before, 3) - +fmt(g.after, 3), 3); }
+  /* _best_feature: best_gain starts at 0, so a question must lower the impurity */
+  function search(pts, crit) {
+    var gs = [0, 1, 2].map(function (f) { return gainOf(pts, f, crit); });
+    var best = null, bestGain = 0;
+    gs.forEach(function (g) { if (!g.skip && g.gain > bestGain) { best = g; bestGain = g.gain; } });
+    return { gains: gs, best: best };
+  }
+
+  /* --------------------------------------------- _build, mirrored */
+  var STOPTXT = {
+    depth: 'max_depth reached', agree: 'everyone agrees', nogain: 'no question helps'
+  };
+  function node0(pts, crit, d) {
+    var cs = pts.map(cl);
+    return { pts: pts, n: pts.length, imp: imp(cs, crit), value: majorityOf(cs), depth: d };
+  }
+  /* the two rules checked before the search, in the order `or` checks them */
+  function stopRule(n, set) {
+    if (n.depth >= set.d) return 'depth';
+    if (pure(n.pts.map(cl))) return 'agree';
+    return null;
+  }
+  function build(pts, depth, set) {
+    var n = node0(pts, set.crit, depth), why = stopRule(n, set);
+    if (why) { n.why = why; return n; }
+    var s = search(pts, set.crit);
+    if (!s.best) { n.why = 'nogain'; return n; }
+    n.f = s.best.f; n.gain = s.best;
+    n.left = build(s.best.L, depth + 1, set);
+    n.right = build(s.best.R, depth + 1, set);
+    return n;
+  }
+  function classify(node, v) {
+    while (node.left) node = v[node.f] === 1 ? node.left : node.right;
+    return node.value;
+  }
+  function leavesOf(n) { return n.left ? leavesOf(n.left).concat(leavesOf(n.right)) : [n]; }
+  function acc(tree, set) {
+    var k = 0;
+    set.forEach(function (p) { if (classify(tree, p.v) === p.c) k++; });
+    return k / set.length;
+  }
+  function numberCalls(root) {        // the order Python makes the calls in
+    var k = 0;
+    (function w(n) { n.order = ++k; if (n.left) { w(n.left); w(n.right); } })(root);
+    return root;
+  }
+  var DEF = { d: 2, crit: 'gini' };
+  var ROOT = numberCalls(build(PTS, 0, DEF));
+
+  /* Four hundred new students from the same school: the rule, with one result
+     in twelve flipped. The tree never trains on them; they only mark it. */
+  function lcg(seed) {
+    var s = seed >>> 0;
+    return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+  }
+  var COHORT = (function (n, seed, noise) {
+    var r = lcg(seed), out = [];
+    for (var i = 0; i < n; i++) {
+      var s = r() < .5 ? 1 : 0, a = r() < .5 ? 1 : 0, g = r() < .5 ? 1 : 0;
+      var c = s && a ? 1 : 0;
+      if (r() < noise) c = 1 - c;
+      out.push({ v: [s, a, g], c: c });
+    }
+    return out;
+  })(400, 20261024, 0.08);
+  var ALWAYSFAIL = COHORT.filter(function (p) { return p.c === 0; }).length / COHORT.length;
+
+  /* ---------------------------------------------------------- tree drawing
+     o.path: nodes to light up · o.mini: smaller boxes · o.reasons: why each
+     leaf stopped · o.order: call numbers · o.next / o.last: the call waiting
+     and the call just made · o.ruler: depth labels · o.cut: a max_depth line */
+  function treeSVG(root, o) {
+    o = o || {};
+    var BW = 170, BH = o.reasons ? 64 : 50, GX = 14, GY = 38;
+    var cn = critName(o.crit);
+    var nLeaves = 0, maxD = 0;
+    function isLeaf(n) { return !n.left || n.state === 'pending'; }
+    (function measure(n, d) {
+      maxD = Math.max(maxD, d);
+      if (!isLeaf(n)) { measure(n.left, d + 1); measure(n.right, d + 1); }
+      else { n._slot = nLeaves++; }
+    })(root, 0);
+    (function place(n, d) {
+      if (!isLeaf(n)) {
+        place(n.left, d + 1); place(n.right, d + 1);
+        n._x = (n.left._x + n.right._x) / 2;
+      } else { n._x = n._slot * (BW + GX) + BW / 2; }
+      n._y = d * (BH + GY);
+    })(root, 0);
+
+    var LM = o.ruler ? 70 : 8;
+    var W = Math.max(nLeaves, 1) * (BW + GX) - GX, H = (maxD + 1) * BH + maxD * GY;
+    var extra = o.cut != null ? GY + 4 : 0;
+    var vbW = W + LM + 8, vbH = H + extra + 26;
+    var s = ['<svg viewBox="' + (-LM) + ' -18 ' + vbW + ' ' + vbH + '" width="100%" ' +
+             'style="max-width:' + Math.round(vbW * 1.12) + 'px;' +
+             (o.mini ? '' : ' min-width:' + Math.round(vbW * .72) + 'px;') + '" ' +
+             'role="img" aria-label="a classification tree">'];
+    if (o.ruler) {
+      for (var d = 0; d <= maxD; d++) {
+        s.push('<text class="truler" x="' + (-LM + 2) + '" y="' + (d * (BH + GY) + BH / 2 + 4) +
+               '">depth ' + d + '</text>');
+      }
+    }
+    if (o.cut != null) {
+      var yc = H + GY / 2 + 2;
+      s.push('<line class="tcut" x1="' + (-LM + 2) + '" x2="' + W + '" y1="' + yc + '" y2="' + yc + '"/>');
+      s.push('<text class="tcutlab" x="' + W + '" y="' + (yc + 16) + '" text-anchor="end">max_depth = ' +
+             o.cut + ': nothing splits below depth ' + o.cut + '</text>');
+    }
+    var onPath = function (n) { return o.path && o.path.indexOf(n) >= 0; };
+    (function edges(n) {
+      if (isLeaf(n)) return;
+      [[n.left, 'yes'], [n.right, 'no']].forEach(function (pair) {
+        var k = pair[0], x1 = n._x, y1 = n._y + BH, x2 = k._x, y2 = k._y, my = (y1 + y2) / 2;
+        var lit = onPath(n) && onPath(k);
+        s.push('<path class="tedge' + (lit ? ' on' : '') + '" d="M' + x1 + ' ' + y1 +
+               ' V' + my + ' H' + x2 + ' V' + y2 + '"/>');
+        s.push('<text class="tbranch" x="' + (x2 + (pair[1] === 'yes' ? -6 : 6)) + '" y="' + (my - 5) +
+               '" text-anchor="' + (pair[1] === 'yes' ? 'end' : 'start') + '">' + pair[1] + '</text>');
+        edges(k);
+      });
+    })(root);
+    (function boxes(n) {
+      var leaf = isLeaf(n), pend = n.state === 'pending';
+      var memo = o.reasons && leaf && !pend && n.n === 1;
+      var cls = pend ? 'tnode-pend' + (o.next === n ? ' next' : '')
+              : leaf ? 'tnode-' + n.value + (memo ? ' memo' : '')
+              : 'tnode-q';
+      if (onPath(n) || o.last === n) cls += ' on';
+      s.push('<rect class="' + cls + '" x="' + (n._x - BW / 2) + '" y="' + n._y +
+             '" width="' + BW + '" height="' + BH + '" rx="5"/>');
+      if (o.order && n.order) {
+        s.push('<text class="torder" x="' + (n._x - BW / 2 + 2) + '" y="' + (n._y - 5) + '">call ' +
+               n.order + '</text>');
+      }
+      var t1, tc = '', meta = n.n + ' student' + (n.n === 1 ? '' : 's') + ' · ' + cn + ' ' + fmt(n.imp, 3);
+      if (pend) t1 = 'waiting';
+      else if (leaf) { t1 = LABEL[n.value]; tc = ' lab' + n.value; }
+      else t1 = FEAT[n.f] + '?';
+      s.push('<text class="ttext' + tc + '" x="' + n._x + '" y="' + (n._y + 21) +
+             '" text-anchor="middle">' + t1 + '</text>');
+      s.push('<text class="tmeta" x="' + n._x + '" y="' + (n._y + 38) +
+             '" text-anchor="middle">' + meta + '</text>');
+      if (o.reasons && leaf && !pend && n.why) {
+        s.push('<text class="twhy' + (memo ? ' memo' : '') + '" x="' + n._x + '" y="' + (n._y + 54) +
+               '" text-anchor="middle">' + (memo ? 'memorised one student' : 'stop: ' + STOPTXT[n.why]) +
+               '</text>');
+      }
+      if (!leaf) { boxes(n.left); boxes(n.right); }
+    })(root);
+    s.push('</svg>');
+    return s.join('');
+  }
+  function walkPath(root, v) {
+    var n = root, path = [n], steps = [];
+    while (n.left) {
+      var hit = v[n.f] === 1;
+      steps.push({ f: n.f, hit: hit });
+      n = hit ? n.left : n.right;
+      path.push(n);
+    }
+    return { leaf: n, path: path, steps: steps };
+  }
+
+  /* --------------------------------------------- small HTML pictures */
+  function stripN(pts) {           // colour = result, number = which student
+    return '<div class="strip">' + pts.map(function (p) {
+      return '<i class="s' + p.c + '" title="student ' + p.i + ', ' + CLASSNAME[p.c] + '">' + p.i + '</i>';
+    }).join('') + '</div>';
+  }
+  function stripY(cs) {
+    return '<div class="strip">' + cs.map(function (c) { return '<i class="s' + c + '">' + c + '</i>'; }).join('') + '</div>';
+  }
+  function hbars(rows) {
+    return '<div class="bars">' + rows.map(function (r) {
+      var w = r.max > 0 ? Math.max(0, Math.min(1, r.v / r.max)) * 100 : 0;
+      return '<div class="row ' + (r.cls || '') + '"><span class="q">' + r.name + '</span>' +
+        '<span class="track"><i style="width:' + w.toFixed(1) + '%"></i></span>' +
+        '<span class="v">' + r.txt + '</span></div>';
+    }).join('') + '</div>';
+  }
+  /* the gain of each question at one node, as a share of that node's impurity:
+     a full bar would mean the question removes all of it */
+  function gainBars(s) {
+    var before = s.gains[0].before;
+    return hbars(s.gains.map(function (g) {
+      if (g.skip) return { name: FEAT[g.f] + '?', v: 0, max: 1, txt: 'skip', cls: 'skip' };
+      return { name: FEAT[g.f] + '?', v: g.gain, max: before, txt: gShow(g),
+               cls: s.best === g ? 'win' : '' };
+    }));
+  }
+  function dropBar(g) {
+    var a = g.after / g.before * 100;
+    return '<div class="drop"><div class="dtrack"><i class="da" style="width:' + a.toFixed(1) + '%"></i>' +
+      '<i class="dg" style="width:' + (100 - a).toFixed(1) + '%"></i></div>' +
+      '<div class="dlab"><span>after ' + fmt(g.after, 3) + '</span><span class="g">gain ' + gShow(g) +
+      '</span></div></div>';
+  }
+
+  /* ============================================================== tab 01 */
+  var ideaPick = [1, 1, 0];
+  function dataTable(holder, mark) {
+    var h = '<tr><th>#</th>' + FEAT.map(function (f) { return '<th>' + f + '</th>'; }).join('') +
+            '<th>result</th></tr>';
+    h += PTS.map(function (p) {
+      return '<tr class="' + (mark(p) ? 'inside' : '') + '"><td class="id">' + p.i + '</td>' +
+        p.v.map(function (v) { return '<td class="y' + v + '">' + YN[v] + '</td>'; }).join('') +
+        '<td class="lab' + p.c + '">' + CLASSNAME[p.c] + '</td></tr>';
+    }).join('');
+    holder.innerHTML = h;
+  }
+  function idea2() {
+    var used = {};
+    (function u(n) { if (n.left) { used[n.f] = 1; u(n.left); u(n.right); } })(ROOT);
+    el('idea-controls').innerHTML = FEAT.map(function (f, i) {
+      return '<div class="qrow"><span class="qname">' + f + '?' +
+        (used[i] ? '' : '<em>the tree never asks this</em>') + '</span>' +
+        '<span class="seg" data-f="' + i + '">' + [1, 0].map(function (v) {
+          return '<button data-v="' + v + '" aria-pressed="' + (ideaPick[i] === v) + '">' + YN[v] + '</button>';
+        }).join('') + '</span></div>';
+    }).join('');
+    var w = walkPath(ROOT, ideaPick);
+    el('idea-tree').innerHTML = treeSVG(ROOT, { path: w.path });
+    var lf = w.leaf, n1 = ones(lf.pts.map(cl));
+    el('idea-walk').innerHTML = w.steps.map(function (st, k) {
+      return (k + 1) + '. ' + padr(FEAT[st.f] + '?', 14) + 'says ' + padr(YN[ideaPick[st.f]], 4) +
+             '-> take the ' + (st.hit ? 'yes' : 'no') + ' branch';
+    }).join('\n') +
+      '\n\n   answer <b>' + LABEL[lf.value] + '</b>   <em>' + lf.n + ' training students ended here</em>';
+    var v = el('v-idea');
+    if (lf.imp === 0) {
+      v.className = 'verdict good';
+      v.innerHTML = '<b>' + w.steps.length + ' question' + (w.steps.length === 1 ? '' : 's') +
+        ', then a leaf where all ' + lf.n + ' training students ' + CLASSNAME[lf.value] + '.</b> ' +
+        'Read the path aloud: that is the whole of the model\'s reasoning.';
+    } else {
+      v.className = 'verdict warn';
+      v.innerHTML = '<b>A mixed leaf.</b> ' + n1 + ' of its ' + lf.n + ' training students passed, so ' +
+        'it answers with the majority: <b>' + LABEL[lf.value] + '</b>. Tab 04 shows why the tree ' +
+        'stops here instead of asking more.';
+    }
+    dataTable(el('idea-data'), function (p) { return walkPath(ROOT, p.v).leaf === lf; });
+  }
+  el('idea-controls').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    ideaPick[+b.parentNode.dataset.f] = +b.dataset.v; idea2();
+  });
+
+  /* ============================================================== tab 02 */
+  var chipY = PTS.map(cl);
+  var Pimp = Plot('c-imp');
+  function drawChips() {
+    el('chips').innerHTML = chipY.map(function (c, i) {
+      return '<button class="k' + c + '" data-i="' + i + '" aria-label="student ' + (i + 1) +
+             ', ' + CLASSNAME[c] + '">' + c + '</button>';
+    }).join('');
+    el('chip-n').textContent = chipY.length + ' students';
+    el('chip-del').disabled = chipY.length <= 2;
+    el('chip-add').disabled = chipY.length >= 16;
+  }
+  function chipWork() {
+    var n = chipY.length, n1 = ones(chipY), n0 = n - n1;
+    var p0 = n0 / n, p1 = n1 / n, g = imp(chipY, 'gini'), e = imp(chipY, 'entropy');
+    function term(p) { return p > 0 ? fmt(p, 3) + '*log2(' + fmt(p, 3) + ')' : '0   (p = 0, skipped)'; }
+    el('chip-work').innerHTML =
+      'counts    failed ' + n0 + '   passed ' + n1 + '   n = ' + n + '\n' +
+      'p         [' + fmt(p0, 3) + ', ' + fmt(p1, 3) + ']\n\n' +
+      'gini      1 - (' + fmt(p0, 3) + '^2 + ' + fmt(p1, 3) + '^2)  = <b>' + fmt(g, 3) + '</b>\n' +
+      'entropy   -(' + term(p0) + ')\n' +
+      '          -(' + term(p1) + ')  = <b>' + fmt(e, 3) + '</b>';
+    var v = el('v-imp');
+    if (n0 === 0 || n1 === 0) {
+      v.className = 'verdict good';
+      v.innerHTML = '<b>Everyone agrees: both rulers read 0.</b> Nothing is left to sort, so the ' +
+        'tree stops here without asking anything.';
+    } else if (n0 === n1) {
+      v.className = 'verdict warn';
+      v.innerHTML = '<b>Half and half: as mixed as two classes get.</b> Gini is at its top, 0.5, ' +
+        'and entropy at its top, 1 bit.';
+    } else {
+      v.className = 'verdict';
+      v.innerHTML = '<b>Leaning ' + CLASSNAME[n1 > n0 ? 1 : 0] + '</b> (' + Math.max(n0, n1) + ' of ' +
+        n + '). Flip chips until one colour wins outright and watch both rulers fall to 0 together.';
+    }
+  }
+  function drawImp() {
+    var P = Pimp.fit(); if (!P) return;
+    P.domain(0, 1, 0, 1.05);
+    P.grid([0, .25, .5, .75, 1], function (y) { return fmt(y, 2); });
+    P.ylabel('impurity');
+    P.label(P.w - P.m.r, P.h - 3, 'share who passed', C.soft, 'right', 'bottom');
+    [0, .25, .5, .75, 1].forEach(function (x) {
+      P.label(P.px(x), P.h - P.m.b + 7, fmt(x, 2), C.faint, 'center', 'top');
+    });
+    var gp = [], ep = [];
+    for (var i = 0; i <= 100; i++) {
+      var p = i / 100, q = 1 - p, e = 0;
+      gp.push([p, 1 - p * p - q * q]);
+      if (p > 0) e -= p * Math.log2(p);
+      if (q > 0) e -= q * Math.log2(q);
+      ep.push([p, e]);
+    }
+    P.path(ep, C.c1, 2.4, [5, 4]);
+    P.path(gp, C.c0, 2.6);
+    var p1 = ones(chipY) / chipY.length, gg = imp(chipY, 'gini'), ee = imp(chipY, 'entropy');
+    P.path([[p1, 0], [p1, Math.max(gg, ee)]], C.sage, 1.4, [4, 3]);
+    P.dot(p1, gg, C.sage, 5.5, '#fff');
+    P.dot(p1, ee, C.sage, 5.5, '#fff');
+    P.label(P.px(p1), P.py(1.03), 'your group', C.sage, p1 > .8 ? 'right' : (p1 < .2 ? 'left' : 'center'));
+    P.label(P.px(.5), P.py(.43), 'gini, top 0.5', C.c0, 'center');
+    P.label(P.px(.5), P.py(.91), 'entropy, top 1 bit', C.c1, 'center');
+  }
+  function imp2() { drawChips(); chipWork(); drawImp(); }
+  el('chips').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    chipY[+b.dataset.i] = 1 - chipY[+b.dataset.i]; imp2();
+  });
+  el('chip-add').addEventListener('click', function () {
+    if (chipY.length < 16) { chipY.push(chipY.length % 2); imp2(); }
+  });
+  el('chip-del').addEventListener('click', function () {
+    if (chipY.length > 2) { chipY.pop(); imp2(); }
+  });
+
+  /* ============================================================== tab 03 */
+  var gCrit = 'gini', gSel = 0;
+  var Pg = Plot('c-gain'); Pg.m = { l: 58, r: 74, t: 34, b: 50 };
+  function gAll(crit) { return search(PTS, crit); }
+  function critSeg(id, cur) {
+    el(id).innerHTML = ['gini', 'entropy'].map(function (c) {
+      return '<button data-c="' + c + '" aria-pressed="' + (c === cur) + '">' + (c === 'gini' ? 'Gini' : 'entropy') + '</button>';
+    }).join('');
+  }
+  function drawGain() {
+    var P = Pg.fit(); if (!P) return;
+    var s = gAll(gCrit), gs = s.gains, before = gs[0].before, top = gCrit === 'gini' ? .5 : 1;
+    P.domain(0, 1, 0, top * 1.12);
+    P.grid(gCrit === 'gini' ? [0, .1, .2, .3, .4, .5] : [0, .2, .4, .6, .8, 1],
+           function (y) { return fmt(y, 1); });
+    P.ylabel(gCrit === 'gini' ? 'Gini impurity' : 'entropy (bits)');
+    var r = P.rect(), cw = r.w / 3, yB = P.py(before), y0 = P.py(0);
+    gs.forEach(function (g, i) {
+      var x = r.x + i * cw, bw = Math.min(cw * .46, 150), bx = x + (cw - bw) / 2, yA = P.py(g.after);
+      var win = s.best === g;
+      if (i === gSel) P.box(x + 4, r.y - 26, cw - 8, r.h + 26, C.c0w);
+      P.box(bx, yA, bw, y0 - yA, C.c0s, C.c0, 1.5);
+      P.box(bx, yB, bw, yA - yB, win ? C.sage : C.sageS, C.sage, 1.5);
+      P.label(bx + bw / 2, yA + 13, 'after ' + fmt(g.after, 3), C.c0);
+      P.label(bx + bw / 2, yB - 13, 'gain ' + gShow(g), win ? C.sage : C.soft, 'center', 'middle', MONOB);
+      P.label(x + cw / 2, P.h - P.m.b + 9, FEAT[i] + '?', i === gSel ? C.ink : C.soft, 'center', 'top', MONOB);
+      if (win) P.label(x + cw / 2, P.h - P.m.b + 28, 'biggest gain: asked first', C.sage, 'center', 'top');
+    });
+    P.hline(r.x, r.x + r.w, yB, C.ink, 1.6, [6, 4]);
+    P.label(r.x + r.w + 8, yB - 8, 'before', C.ink, 'left');
+    P.label(r.x + r.w + 8, yB + 8, fmt(before, 3), C.ink, 'left', 'middle', MONOB);
+  }
+  function gWork() {
+    var s = gAll(gCrit), g = s.gains[gSel], cn = critName(gCrit), f = FEAT[gSel];
+    el('g-head').textContent = 'what "' + f + '?" does to the twelve';
+    el('g-sides').innerHTML =
+      '<p class="striphead">before &mdash; all 12 &middot; ' + cn + ' <b>' + fmt(g.before, 3) + '</b></p>' + stripN(PTS) +
+      '<p class="striphead">' + f + ' = yes &mdash; ' + g.L.length + ' &middot; ' + cn + ' <b>' + fmt(g.gl, 3) + '</b></p>' + stripN(g.L) +
+      '<p class="striphead">' + f + ' = no &mdash; ' + g.R.length + ' &middot; ' + cn + ' <b>' + fmt(g.gr, 3) + '</b></p>' + stripN(g.R) +
+      '<p class="striphead">the whole bar is the impurity before</p>' + dropBar(g);
+    el('g-work').innerHTML =
+      'before   I(all 12)                     = ' + fmt(g.before, 3) + '\n' +
+      'after    ' + g.L.length + '/12 × ' + fmt(g.gl, 3) + ' + ' + g.R.length + '/12 × ' + fmt(g.gr, 3) +
+      ' = ' + fmt(g.after, 3) + '\n' +
+      'gain     ' + fmt(g.before, 3) + ' − ' + fmt(g.after, 3) + '                 = <b>' + gShow(g) + '</b>';
+    var v = el('v-gain'), b = s.best;
+    if (b === g) {
+      v.className = 'verdict good';
+      v.innerHTML = '<b>' + f + '? has the biggest gain</b>, with Gini and with entropy, so it ' +
+        'becomes the first question the tree asks.';
+    } else {
+      v.className = 'verdict';
+      v.innerHTML = '<b>' + f + '? lowers the impurity by ' + gShow(g) + '</b>, less than ' +
+        FEAT[b.f] + '? (' + gShow(b) + '). The search keeps the biggest.';
+    }
+    var sg = gAll('gini'), se = gAll('entropy');
+    el('g-cmp').innerHTML = '<tr><th>question</th><th class="r">gain with Gini</th><th class="r">gain with entropy</th></tr>' +
+      [0, 1, 2].map(function (i) {
+        var w = sg.best === sg.gains[i] && se.best === se.gains[i];
+        return '<tr class="' + (w ? 'best' : '') + '"><td>' + FEAT[i] + '?' + (w ? ' &larr; both pick this' : '') +
+          '</td><td class="r">' + gShow(sg.gains[i]) + '</td><td class="r">' + gShow(se.gains[i]) + '</td></tr>';
+      }).join('');
+  }
+  function gain2() {
+    critSeg('g-crit', gCrit);
+    el('g-q').innerHTML = FEAT.map(function (f, i) {
+      return '<button data-i="' + i + '" aria-pressed="' + (i === gSel) + '">' + f + '?</button>';
+    }).join('');
+    drawGain(); gWork();
+  }
+  el('g-crit').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return; gCrit = b.dataset.c; gain2();
+  });
+  el('g-q').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return; gSel = +b.dataset.i; gain2();
+  });
+  el('c-gain').addEventListener('click', function (e) {
+    var rc = this.getBoundingClientRect(), pr = Pg.rect();
+    var i = Math.floor((e.clientX - rc.left - pr.x) / (pr.w / 3));
+    if (i >= 0 && i < 3) { gSel = i; gain2(); }
+  });
+
+  /* ============================================================== tab 04
+     One tree, grown one _build call at a time. Each pending node is a call
+     waiting on the stack; step resolves the next one, depth first, yes side
+     first, which is the order the recursion in tab 05 makes them. */
+  var B = { set: { d: 2, crit: 'gini' }, root: null, calls: 0, last: null };
+  function bReset() {
+    B.root = node0(PTS, B.set.crit, 0); B.root.state = 'pending'; B.calls = 0; B.last = null;
+  }
+  function nextPending(n) {
+    if (n.state === 'pending') return n;
+    if (!n.left) return null;
+    return nextPending(n.left) || nextPending(n.right);
+  }
+  function bStep() {
+    var n = nextPending(B.root); if (!n) return false;
+    delete n.state; n.order = ++B.calls;
+    var why = stopRule(n, B.set), s = null;
+    if (!why) { s = search(n.pts, B.set.crit); if (!s.best) why = 'nogain'; }
+    B.last = { node: n, why: why, s: s };
+    if (why) { n.why = why; return true; }
+    n.f = s.best.f; n.gain = s.best;
+    n.left = node0(s.best.L, B.set.crit, n.depth + 1); n.left.state = 'pending';
+    n.right = node0(s.best.R, B.set.crit, n.depth + 1); n.right.state = 'pending';
+    return true;
+  }
+  function stopList(n, why, s) {
+    var n1 = ones(n.pts.map(cl)), stopped = false;
+    var rows = [
+      { k: 'depth', q: 'deep enough?', a: 'depth ' + n.depth + ' ≥ ' + B.set.d },
+      { k: 'agree', q: 'everyone agrees?', a: n1 + ' passed · ' + (n.n - n1) + ' failed' },
+      { k: 'nogain', q: 'any question with gain > 0?', a: s && s.best ? FEAT[s.best.f] + '? ' + gShow(s.best) : (s ? 'none' : '') }
+    ];
+    return '<ol class="stops">' + rows.map(function (r) {
+      var cls, tag;
+      if (!why && !s) { cls = 'wait'; tag = '·'; }
+      else if (stopped) { cls = 'skip'; tag = 'not checked'; }
+      else if (r.k === 'nogain') {
+        if (why === 'nogain') { cls = 'stop'; tag = 'no → leaf'; stopped = true; }
+        else { cls = 'go'; tag = 'yes → split'; }
+      } else if (why === r.k) { cls = 'stop'; tag = 'yes → leaf'; stopped = true; }
+      else { cls = 'no'; tag = 'no'; }
+      return '<li class="' + cls + '"><span>' + r.q + '</span><span class="a">' +
+        (cls === 'skip' || cls === 'wait' ? '' : r.a) + '</span><span class="s">' + tag + '</span></li>';
+    }).join('') + '</ol>';
+  }
+  function build2() {
+    var pend = nextPending(B.root), L = B.last;
+    el('b-tree').innerHTML = treeSVG(B.root, {
+      crit: B.set.crit, reasons: true, order: true, next: pend, last: L && L.node
+    });
+    var flow = { try: false, keep: false, split: false, leaf: false };
+    if (L && L.why) flow.leaf = true;
+    else if (L) flow.try = flow.keep = flow.split = true;
+    Array.prototype.forEach.call(el('b-flow').children, function (li) {
+      li.classList.toggle('on', !!flow[li.dataset.k]);
+    });
+
+    var cn = critName(B.set.crit), head = el('b-head'), body = el('b-call');
+    if (!L) {
+      head.textContent = 'call 1 is waiting';
+      body.innerHTML = '<p class="striphead">the ' + B.root.n + ' students it will see &middot; ' + cn + ' ' +
+        fmt(B.root.imp, 3) + '</p>' + stripN(B.root.pts) +
+        '<p class="striphead">stop rules, checked in order</p>' + stopList(B.root, null, null) +
+        '<p class="hint" style="margin-top:12px"><b>Press step</b> to run it.</p>';
+    } else {
+      var n = L.node;
+      head.textContent = 'call ' + n.order + ' · depth ' + n.depth + ' · ' + n.n + ' student' + (n.n === 1 ? '' : 's');
+      body.innerHTML = '<p class="striphead">the students this call sees &middot; ' + cn + ' <b>' +
+        fmt(n.imp, 3) + '</b></p>' + stripN(n.pts) +
+        '<p class="striphead">stop rules, checked in order</p>' + stopList(n, L.why === 'nogain' ? 'nogain' : L.why, L.s) +
+        (L.s ? '<p class="striphead">the search: gain of each question here</p>' + gainBars(L.s) : '');
+    }
+
+    var v = el('v-b');
+    if (!L) {
+      v.className = 'verdict';
+      v.innerHTML = 'One call waiting, on all ' + B.root.n + ' students.';
+    } else if (!L.why) {
+      v.className = 'verdict';
+      v.innerHTML = '<b>Call ' + L.node.order + ' asks ' + FEAT[L.node.f] + '?</b> &mdash; gain ' +
+        gShow(L.s.best) + ', the biggest here. It now calls itself on the ' + L.node.left.n +
+        ' yes students, then on the ' + L.node.right.n + ' no students.';
+    } else {
+      var memo = L.node.n === 1;
+      v.className = memo ? 'verdict warn' : 'verdict good';
+      v.innerHTML = '<b>Call ' + L.node.order + ' is a leaf: ' + LABEL[L.node.value] + '.</b> ' +
+        (memo ? 'It holds a single student, so it has memorised a person rather than learned a rule.'
+              : 'Stopped because: ' + STOPTXT[L.why] + '.') +
+        (pend ? '' : ' <b>No calls left: the tree is finished, with ' + leavesOf(B.root).length + ' leaves.</b>');
+    }
+    el('b-step').disabled = !pend;
+    el('b-all').disabled = !pend;
+    drawFit();
+  }
+  function bAll() { var guard = 0; while (nextPending(B.root) && guard++ < 50) bStep(); }
+
+  var Pf = Plot('c-fit'); Pf.m = { l: 48, r: 22, t: 16, b: 30 };
+  function drawFit() {
+    var P = Pf.fit(); if (!P) { fitVerdict(); return; }
+    P.domain(.65, 3.35, .6, 1.03);
+    P.grid([.6, .7, .8, .9, 1], pct);
+    [1, 2, 3].forEach(function (d) {
+      P.label(P.px(d), P.h - P.m.b + 8, 'max_depth ' + d, d === B.set.d ? C.ink : C.faint, 'center', 'top',
+              d === B.set.d ? '600 12px "IBM Plex Mono", monospace' : MONO);
+    });
+    var tr = [], te = [];
+    [1, 2, 3].forEach(function (d) {
+      var T = build(PTS, 0, { d: d, crit: B.set.crit });
+      tr.push([d, acc(T, PTS)]); te.push([d, acc(T, COHORT)]);
+    });
+    var r = P.rect(), xd = P.px(B.set.d);
+    P.box(xd - 30, r.y, 60, r.h, C.c0w);
+    P.path([[.65, ALWAYSFAIL], [3.35, ALWAYSFAIL]], C.faint, 1.4, [5, 4]);
+    P.label(P.px(1.5), P.py(ALWAYSFAIL) + 11, 'always FAIL ' + pct(ALWAYSFAIL), C.faint, 'center');
+    P.path(tr, C.c0, 2.6); P.path(te, C.c1, 2.6);
+    tr.forEach(function (p) { P.dot(p[0], p[1], C.c0, p[0] === B.set.d ? 6 : 3.8, '#fff'); });
+    te.forEach(function (p) { P.dot(p[0], p[1], C.c1, p[0] === B.set.d ? 6 : 3.8, '#fff'); });
+    var k = B.set.d - 1;
+    P.label(P.px(tr[k][0]), P.py(tr[k][1]) - 15, pct(tr[k][1]), C.c0, 'center', 'middle', MONOB);
+    P.label(P.px(te[k][0]), P.py(te[k][1]) + 16, pct(te[k][1]), C.c1, 'center', 'middle', MONOB);
+    fitVerdict();
+  }
+  function fitVerdict() {
+    var T = build(PTS, 0, B.set), tr = acc(T, PTS), te = acc(T, COHORT);
+    var memo = leavesOf(T).filter(function (n) { return n.n === 1; });
+    var v = el('v-fit'), nums = 'Train ' + pct(tr) + ', new students ' + pct(te) + '.';
+    if (memo.length) {
+      v.className = 'verdict warn';
+      v.innerHTML = '<b>' + nums + '</b> The extra question exists only to remember student ' +
+        memo[0].pts[0].i + ', and new students pay for it.';
+    } else if (B.set.d === 1) {
+      v.className = 'verdict warn';
+      v.innerHTML = '<b>' + nums + '</b> One question is not enough: it cannot tell "submitted but ' +
+        'skipped class" apart, and barely beats always saying FAIL.';
+    } else {
+      v.className = 'verdict good';
+      v.innerHTML = '<b>' + nums + '</b> One training student stays wrong, and that is the right ' +
+        'call: student 5 was a fluke, not a rule.';
+    }
+  }
+  el('b-step').addEventListener('click', function () { bStep(); build2(); });
+  el('b-all').addEventListener('click', function () { bAll(); build2(); });
+  el('b-reset').addEventListener('click', function () { bReset(); build2(); });
+  function bSettings() { bReset(); bAll(); build2(); }
+  el('s-d').addEventListener('input', function () { B.set.d = +this.value; el('o-d').textContent = this.value; bSettings(); });
+  el('b-crit').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    B.set.crit = b.dataset.c; critSeg('b-crit', B.set.crit); bSettings();
+  });
+
+  /* ============================================================== tab 05 */
+  var CODE = [
+    ['import numpy as np',
+     '',
+     '',
+     'def gini(y):',
+     '    """How mixed a group is: 0 when everyone agrees, 0.5 at half and half."""',
+     '    if len(y) == 0:',
+     '        return 0.0',
+     '    p = np.bincount(y, minlength=2) / len(y)',
+     '    return 1.0 - (p ** 2).sum()',
+     '',
+     '',
+     'def entropy(y):',
+     '    """The same idea in bits: 0 when everyone agrees, 1 at half and half."""',
+     '    if len(y) == 0:',
+     '        return 0.0',
+     '    p = np.bincount(y, minlength=2) / len(y)',
+     '    p = p[p > 0]                          # log2(0) is undefined',
+     '    return -(p * np.log2(p)).sum()',
+     '', ''],
+    ['class Node:',
+     '    """A question with two children, or a leaf with an answer."""',
+     '',
+     '    def __init__(self, feature=None, left=None, right=None, label=None):',
+     '        self.feature = feature            # the question: X[feature] == 1 ?',
+     '        self.left = left                  # where the yes rows went',
+     '        self.right = right                # where the no rows went',
+     '        self.label = label                # set only on a leaf',
+     '', ''],
+    ['class DecisionTree:',
+     '    def __init__(self, max_depth=2, criterion="gini"):',
+     '        self.max_depth = max_depth',
+     '        self.impurity = gini if criterion == "gini" else entropy',
+     ''],
+    ['    def _gain(self, y, mask):',
+     '        """Information gain: impurity before the question minus after it."""',
+     '        before = self.impurity(y)',
+     '        after = (mask.sum() * self.impurity(y[mask])',
+     '                 + (~mask).sum() * self.impurity(y[~mask])) / len(y)',
+     '        return before - after',
+     ''],
+    ['    def _best_feature(self, X, y):',
+     '        """Ask every feature; keep the one whose gain is largest."""',
+     '        best_f, best_gain = None, 0.0',
+     '        for f in range(X.shape[1]):',
+     '            mask = X[:, f] == 1',
+     '            if mask.all() or not mask.any():    # everyone on one side',
+     '                continue',
+     '            g = self._gain(y, mask)',
+     '            if g > best_gain:',
+     '                best_f, best_gain = f, g',
+     '        return best_f',
+     ''],
+    ['    def _build(self, X, y, depth):',
+     '        if (depth >= self.max_depth             # deep enough',
+     '                or len(np.unique(y)) == 1):     # everyone agrees',
+     '            return Node(label=np.bincount(y).argmax())',
+     '        f = self._best_feature(X, y)',
+     '        if f is None:                           # no question helps',
+     '            return Node(label=np.bincount(y).argmax())',
+     '        mask = X[:, f] == 1',
+     '        return Node(feature=f,',
+     '                    left=self._build(X[mask], y[mask], depth + 1),',
+     '                    right=self._build(X[~mask], y[~mask], depth + 1))',
+     ''],
+    ['    def fit(self, X, y):',
+     '        self.root = self._build(np.asarray(X), np.asarray(y), 0)',
+     '        return self',
+     ''],
+    ['    def predict(self, X):',
+     '        out = []',
+     '        for x in np.asarray(X):',
+     '            node = self.root',
+     '            while node.label is None:           # still a question',
+     '                node = node.left if x[node.feature] == 1 else node.right',
+     '            out.append(node.label)',
+     '        return np.array(out)']
+  ].map(function (lines) { return lines.join('\n'); });
+
+  function visImpurity() {
+    var ys = PTS.map(cl), n1 = ones(ys), n0 = ys.length - n1, n = ys.length;
+    var g = imp(ys, 'gini'), e = imp(ys, 'entropy');
+    return '<p class="striphead">y &mdash; the twelve results</p>' + stripY(ys) +
+      '<p class="striphead">np.bincount(y, minlength=2)</p>' +
+      hbars([{ name: '0 failed', v: n0, max: n, txt: String(n0), cls: 'c0' },
+             { name: '1 passed', v: n1, max: n, txt: String(n1), cls: 'c1' }]) +
+      '<p class="striphead">p = counts / ' + n + '</p>' +
+      '<div class="pbar"><i class="p0" style="width:' + (n0 / n * 100) + '%">' + fmt(n0 / n, 3) + '</i>' +
+      '<i class="p1" style="width:' + (n1 / n * 100) + '%">' + fmt(n1 / n, 3) + '</i></div>' +
+      '<p class="striphead">the two rulers &mdash; each bar is out of its top value</p>' +
+      hbars([{ name: 'gini', v: g, max: .5, txt: fmt(g, 3), cls: 'ink' },
+             { name: 'entropy', v: e, max: 1, txt: fmt(e, 3), cls: 'ink' }]);
+  }
+  function visNode() {
+    return '<svg viewBox="0 0 470 182" width="100%" style="max-width:470px" role="img" aria-label="a question node and a leaf">' +
+      '<rect class="tnode-q" x="6" y="6" width="210" height="66" rx="5"/>' +
+      '<text class="ttext" x="111" y="28" text-anchor="middle">submitted?</text>' +
+      '<text class="tmeta" x="111" y="46" text-anchor="middle">feature = 0</text>' +
+      '<text class="tmeta" x="111" y="62" text-anchor="middle">label = None</text>' +
+      '<path class="tedge" d="M111 72 V92 H53 V112"/><path class="tedge" d="M111 72 V92 H169 V112"/>' +
+      '<rect class="tnode-pend" x="7" y="112" width="92" height="34" rx="5"/>' +
+      '<text class="tmeta" x="53" y="133" text-anchor="middle">left (yes)</text>' +
+      '<rect class="tnode-pend" x="123" y="112" width="92" height="34" rx="5"/>' +
+      '<text class="tmeta" x="169" y="133" text-anchor="middle">right (no)</text>' +
+      '<text class="truler" x="111" y="172" text-anchor="middle">a question: label is None</text>' +
+      '<rect class="tnode-1" x="254" y="6" width="210" height="66" rx="5"/>' +
+      '<text class="ttext lab1" x="359" y="28" text-anchor="middle">PASS</text>' +
+      '<text class="tmeta" x="359" y="46" text-anchor="middle">label = 1</text>' +
+      '<text class="tmeta" x="359" y="62" text-anchor="middle">feature = None</text>' +
+      '<text class="truler" x="359" y="94" text-anchor="middle">an answer: label is set</text>' +
+      '</svg>';
+  }
+  function visSettings() {
+    return '<div class="kvs"><span>max_depth = 2</span><span>criterion = "gini"</span></div>' +
+      treeSVG(ROOT, { mini: true, ruler: true, cut: 2 }) +
+      '<p class="cap">Swap <code>"gini"</code> for <code>"entropy"</code> and this tree comes out the same.</p>';
+  }
+  function visGain() {
+    var g = gainOf(PTS, 0, 'gini');
+    return '<p class="striphead">y &mdash; all 12 &middot; gini <b>' + fmt(g.before, 3) + '</b></p>' + stripN(PTS) +
+      '<p class="striphead">y[mask] &mdash; submitted &middot; gini <b>' + fmt(g.gl, 3) + '</b></p>' + stripN(g.L) +
+      '<p class="striphead">y[~mask] &mdash; did not &middot; gini <b>' + fmt(g.gr, 3) + '</b></p>' + stripN(g.R) +
+      '<p class="striphead">the whole bar is "before"</p>' + dropBar(g);
+  }
+  function visSearch() {
+    var s = search(PTS, 'gini');
+    return '<p class="striphead">gain of each feature at the root</p>' + gainBars(s) +
+      '<p class="striphead">the winner\'s mask: X[:, ' + s.best.f + '] == 1</p>' +
+      '<div class="strip">' + PTS.map(function (p) {
+        var t = p.v[s.best.f] === 1;
+        return '<i class="' + (t ? 'sT' : 'sF') + '" title="student ' + p.i + '">' + (t ? 'T' : 'F') + '</i>';
+      }).join('') + '</div>';
+  }
+  function visBuild() {
+    return treeSVG(ROOT, { mini: true, reasons: true, order: true }) +
+      '<p class="cap">Numbers are the order the calls happen in: always the yes side first.</p>';
+  }
+  function visFit() {
+    var h = '<div class="xg">' + ['f0', 'f1', 'f2'].map(function (t) { return '<span class="xh">' + t + '</span>'; }).join('') +
+            '<span></span><span class="xh">y</span>';
+    PTS.forEach(function (p) {
+      h += p.v.map(function (v) { return '<span class="x' + v + '">' + v + '</span>'; }).join('') +
+           '<span></span><span class="y' + p.c + '">' + p.c + '</span>';
+    });
+    return '<div class="xwrap">' + h + '</div><p class="cap">X is 12 &times; 3: f0 submitted, f1 attended, ' +
+      'f2 study_group. Yes is 1, no is 0.<br><br>y is the result: 1 passed, 0 failed.</p></div>';
+  }
+  var PX = [1, 0, 1];
+  function visPredict() {
+    var w = walkPath(ROOT, PX);
+    return treeSVG(ROOT, { mini: true, path: w.path });
+  }
+
+  function walkthrough(codeId, noteId, regions) {
+    var codeEl = el(codeId), noteEl = el(noteId), sel = 0;
+    codeEl.innerHTML = regions.map(function (r, i) {
+      return '<span class="rg" data-i="' + i + '" tabindex="0" role="button">' + py(r.code) + '</span>';
+    }).join('');
+    function show(i) {
+      sel = i;
+      Array.prototype.forEach.call(codeEl.children, function (e, k) { e.classList.toggle('on', k === i); });
+      refresh();
+    }
+    function refresh() {
+      var r = regions[sel], live = r.live ? r.live() : null;
+      noteEl.innerHTML =
+        '<div class="body">' +
+        '<p class="tagline">' + r.tag + '</p>' +
+        '<h3>' + r.title + '</h3>' +
+        r.why.map(function (t) { return '<p>' + t + '</p>'; }).join('') +
+        (r.vis ? '<div class="vis">' + r.vis() + '</div>' : '') +
+        (live ? '<div class="livebox">' + live + '</div>' : '') +
+        '</div>' +
+        (r.watch ? '<p class="watch">' + r.watch + '</p>' : '');
+    }
+    codeEl.addEventListener('click', function (e) {
+      var t = e.target.closest('.rg'); if (t) show(+t.dataset.i);
+    });
+    codeEl.addEventListener('keydown', function (e) {
+      var t = e.target.closest('.rg'); if (!t) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(+t.dataset.i); }
+    });
+    show(0);
+    return { refresh: refresh };
+  }
+
+  var WT = walkthrough('src-code', 'codenote', [
+    {
+      tag: 'impurity', title: 'Two rulers, a few lines each', code: CODE[0],
+      why: ['<code>np.bincount</code> counts the 0s and 1s, and dividing by <code>len(y)</code> turns ' +
+            'the counts into proportions <code>p</code>.',
+            'Gini squares them; entropy takes logs, after dropping any <code>p = 0</code>.'],
+      vis: visImpurity
+    },
+    {
+      tag: 'the node', title: 'A question or an answer', code: CODE[1],
+      why: ['A question node keeps <code>feature</code> and two children; a leaf keeps only ' +
+            '<code>label</code>. <b><code>label is None</code> means "still a question".</b>'],
+      vis: visNode
+    },
+    {
+      tag: 'settings', title: 'How deep to go, and which ruler', code: CODE[2],
+      why: ['Nothing is computed yet. <code>self.impurity</code> holds <em>a function</em>, so the ' +
+            'rest of the class works the same with either ruler.'],
+      vis: visSettings
+    },
+    {
+      tag: 'information gain', title: 'Before minus after', code: CODE[3],
+      why: ['<code>mask</code> is True for the yes rows, and <code>~mask</code> for the no rows.',
+            '<b>After</b> is each side\'s impurity, weighted by how many rows it holds.'],
+      vis: visGain,
+      live: function () {
+        var g = gainOf(PTS, 0, 'gini');
+        return 'before = ' + fmt(g.before, 3) + '\n' +
+               'after  = (7 × ' + fmt(g.gl, 3) + ' + 5 × ' + fmt(g.gr, 3) + ') / 12 = ' + fmt(g.after, 3) + '\n' +
+               'gain   = <b>' + gShow(g) + '</b>';
+      },
+      watch: '<b>Drop the weights and a 1-student side counts as much as an 11-student one</b>, so ' +
+             'the tree would happily split off one student at a time.'
+    },
+    {
+      tag: 'the search', title: 'One question per feature, keep the biggest gain', code: CODE[4],
+      why: ['With 0/1 features each column gives exactly one question, so the search is three tries.',
+            '<code>best_gain</code> starts at 0: a question must lower the impurity to be kept. If ' +
+            'none does, the answer is <code>None</code>.'],
+      vis: visSearch
+    },
+    {
+      tag: 'training', title: 'Stop, or split and call itself twice', code: CODE[5],
+      why: ['Two stop rules first. Otherwise, split on the best feature and build a smaller tree on ' +
+            'each side.',
+            'Each child gets only its own rows, <code>X[mask]</code>, never the whole <code>X</code>.'],
+      vis: visBuild
+    },
+    {
+      tag: 'the api', title: 'Hand it the table, get a tree', code: CODE[6],
+      why: ['<code>fit</code> starts the recursion at depth 0 on every row. <code>return self</code> ' +
+            'lets you write <code>DecisionTree().fit(X, y).predict(X)</code>.'],
+      vis: visFit
+    },
+    {
+      tag: 'prediction', title: 'Follow yes and no down to a leaf', code: CODE[7],
+      why: ['No arithmetic at all: compare, step left or right, repeat, and read the label.'],
+      vis: visPredict,
+      live: function () {
+        var w = walkPath(ROOT, PX);
+        return 'x = [' + PX.join(', ') + ']   <em>submitted, skipped class, study group</em>\n' +
+          w.steps.map(function (st) {
+            return 'x[' + st.f + '] == 1 ?  ' + PX[st.f] + ' == 1  ' + (st.hit ? 'yes -> left' : 'no  -> right');
+          }).join('\n') +
+          '\nlabel = <b>' + w.leaf.value + '</b>   <em>' + LABEL[w.leaf.value] + '</em>\n\n' +
+          '<em>That is student 5, who actually passed: the one training student this tree gets wrong, ' +
+          'on purpose. Tab 04 shows why.</em>';
+      }
+    }
+  ]);
+
+  /* ================================================================== tabs */
+  var TABS = [
+    { btn: 'tab-1', panel: 'p-1', draw: idea2 },
+    { btn: 'tab-2', panel: 'p-2', draw: imp2 },
+    { btn: 'tab-3', panel: 'p-3', draw: gain2 },
+    { btn: 'tab-4', panel: 'p-4', draw: build2 },
+    { btn: 'tab-5', panel: 'p-5', draw: function () { WT.refresh(); } }
+  ];
+  TABS.forEach(function (t) {
+    el(t.btn).addEventListener('click', function () {
+      TABS.forEach(function (o) {
+        var on = o === t;
+        el(o.btn).setAttribute('aria-selected', String(on));
+        el(o.panel).hidden = !on;
+      });
+      t.draw();
+    });
+  });
+  var rt;
+  function redrawAll() { drawImp(); drawGain(); drawFit(); }
+  window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(redrawAll, 130); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+
+  /* ------------------------------------------------------------------ init */
+  critSeg('b-crit', B.set.crit);
+  idea2();
+  imp2();
+  gain2();
+  bReset(); build2();
+})();
+</script>
