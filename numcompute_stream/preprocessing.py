@@ -101,9 +101,46 @@ class SimpleImputer:
     AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). The code was reviewed and modified
     to fit the package requirements.
     """
-    def __init__(self, fill_value=0, dtype=float):
+    def __init__(self, fill_value=0, dtype=float, strategy="constant"):
+        if strategy not in ("constant", "mean"):
+            raise ValueError("Invalid imputation strategy")
+
+        if dtype not in (float, str):
+            raise ValueError("dtype must be float or str")
+
+        if strategy == "mean" and dtype != float:
+            raise ValueError("Mean strategy requires float dtype")
         self.fill_value = fill_value
         self.dtype = dtype
+        self.strategy = strategy
+        self.stats = StreamingStats(track_quantiles=False)
+        self.n_features = None
+
+    def partial_fit(self, data):
+        data = np.asarray(data)
+
+        if data.ndim != 2:
+            raise ValueError("Input must be 2D")
+
+        if 0 in data.shape:
+            raise ValueError("Input cannot be empty")
+
+        if self.n_features is not None:
+            if data.shape[1] != self.n_features:
+                raise ValueError("Feature count does not match")
+
+        if self.strategy == "mean":
+            cleaned = np.char.strip(data.astype(str))
+            missing = ((cleaned == "") | (np.char.lower(cleaned) == "nan"))
+
+            numeric = np.where(missing, "nan", cleaned).astype(float)
+
+            if np.isinf(numeric).any():
+                raise ValueError("Input cannot contain infinity")
+            self.stats.update_stats(numeric)
+
+        self.n_features = data.shape[1]
+        return self
 
     def fit(self, data):
         """
@@ -115,9 +152,10 @@ class SimpleImputer:
         Raises:
         ValueError: if dimensions are not 2 
         """
-        if np.ndim(data) != 2:
-            raise ValueError("Input must be 2D")
-        return self
+        self.stats.reset()
+        self.n_features = None
+
+        return self.partial_fit(data)
 
     def transform(self, data):
         """
@@ -129,23 +167,31 @@ class SimpleImputer:
         Raises:
         ValueError: if dimensions are not 2, type is not float or string
         """
-        if np.ndim(data) != 2:
-            raise ValueError("Input must be 2D")
+        if self.n_features is None:
+            raise ValueError("SimpleImputer must be fitted first")
 
-        data = np.asarray(data, dtype=str)
-        cleaned = np.char.strip(data)
-        missing = (cleaned == "") | (np.char.lower(cleaned) == "nan")
+        data = np.asarray(data)
+
+        if data.ndim != 2 or data.shape[1] != self.n_features:
+            raise ValueError("Input shape does not match")
+
+        cleaned = np.char.strip(data.astype(str))
+
+        missing = ((cleaned == "") | (np.char.lower(cleaned) == "nan"))
 
         if self.dtype == float:
-            fill = float(self.fill_value)
-            numeric = np.where(missing, "nan", data).astype(float)
+            numeric = np.where(missing, "nan", cleaned).astype(float)
+            if np.isinf(numeric).any():
+                raise ValueError("Input cannot contain infinity")
+
+            if self.strategy == "mean":
+                fill = self.stats.mean_result()
+                fill = np.where(np.isnan(fill), float(self.fill_value), fill)
+            else:
+                fill = float(self.fill_value)
             return np.where(np.isnan(numeric), fill, numeric)
+        return np.where(missing, str(self.fill_value), data.astype(str))
 
-        elif self.dtype == str:
-            return np.where(missing, str(self.fill_value), data)
-
-        else:
-            raise ValueError("dtype must be float or str")
 
     def fit_transform(self, data):
         """
@@ -312,7 +358,7 @@ class MinMaxScaler:
         if self.min is None:
             raise ValueError("MinMaxScaler must be fitted first")
         data = np.asarray(data, dtype=float)
-        
+
         if data.ndim != 2:
             raise ValueError("Input must be 2D")
         
