@@ -36,6 +36,15 @@ class ColumnSelector:
         self.selected = selected
         self.indices = None
 
+    
+    def partial_fit(self, data):
+        """
+        Update the column selection for streaming data.
+        The selected columns remain unchanged across chunks.
+        """
+        return self.fit(data)
+
+
     def fit(self, data):
         """
         Find and store the indices of selected columns.
@@ -403,6 +412,33 @@ class OneHotEncoder:
     """
     def __init__(self):
         self.categories = None
+
+
+    
+    def partial_fit(self, data):
+        data = np.asarray(data)
+
+        if data.ndim != 2:
+            raise ValueError("Input must be 2D")
+
+        if data.shape[0] == 0 or data.shape[1] == 0:
+            raise ValueError("Input cannot be empty")
+
+        if self.categories is None:
+            self.categories = [np.array([], dtype=data.dtype)
+                for _ in range(data.shape[1])
+            ]
+
+        elif data.shape[1] != len(self.categories):
+            raise ValueError("Feature count does not match")
+
+        for i in range(data.shape[1]):
+            new_categories = np.unique(data[:, i])
+            unseen = new_categories[~np.isin(new_categories, self.categories[i])]
+            self.categories[i] = np.concatenate([self.categories[i], unseen])
+
+        return self
+
    
 
     def fit(self, data):
@@ -415,12 +451,8 @@ class OneHotEncoder:
         Raises:
         ValueError: if dimensions are not 2 
         """
-        if np.ndim(data) != 2:
-            raise ValueError("Input must be 2D")
-        self.categories = []
-        for i in range(data.shape[1]):
-            self.categories.append(np.unique(data[:, i]))
-        return self
+        self.categories = None
+        return self.partial_fit(data)
 
     def transform(self, data):
         """
