@@ -14,6 +14,7 @@ Transformer/Estimator API, Compose, FeatureUnion
 
 """
 import numpy as np
+from copy import deepcopy
 
 class Pipeline:
     """
@@ -33,6 +34,10 @@ class Pipeline:
         if not steps:
             raise ValueError("Pipeline must contain at least one step")
         self.steps = steps
+        self._pending_X = []
+        self._pending_y = []
+        self._pending_count = 0
+        self._active_transformers = None
 
     def fit(self, data, y=None):
         """
@@ -45,6 +50,10 @@ class Pipeline:
         Raises:
         ValueError: if the predictor is not in the last step
         """
+        self._pending_X.clear()
+        self._pending_y.clear()
+        self._pending_count = 0
+        self._active_transformers = None
         processed = data
         for name, transformer in self.steps[:-1]:
             if (hasattr(transformer, "predict")):
@@ -60,7 +69,62 @@ class Pipeline:
             last.fit(processed, y)
         else:
             last.fit(processed)
+        if hasattr(self.steps[-1][1], "predict"):
+            self._active_transformers = deepcopy(self.steps[:-1])
         return self
+
+    
+
+    def partial_fit(self, X, y=None):
+        last_name, last_step = self.steps[-1]
+        if hasattr(last_step, "transform"):
+            data = X
+            for name, step in self.steps:
+                step.partial_fit(data)
+                data = step.transform(data)
+            return self
+
+        if y is None:
+            raise ValueError("Labels are required for training")
+        if len(self.steps) == 1:
+            last_step.partial_fit(X, y)
+            return self
+        if not hasattr(last_step, "buffer_size"):
+            raise TypeError("Estimator must support buffered training")
+
+        X = np.asarray(X)
+        y = np.asarray(y)
+
+        if X.ndim != 2 or y.ndim != 1:
+            raise ValueError("X must be 2D and y must be 1D")
+
+        if len(X) == 0 or len(X) != len(y):
+            raise ValueError("Invalid chunk size")
+
+        if self._pending_X:
+            if X.shape[1] != self._pending_X[0].shape[1]:
+                raise ValueError("Feature count mismatch")
+        data = X
+
+        for name, step in self.steps[:-1]:
+            step.partial_fit(data)
+            data = step.transform(data)
+        self._pending_X.append(X.copy())
+        self._pending_y.append(y.copy())
+        self._pending_count += len(y)
+        if self._pending_count >= last_step.buffer_size:
+            X_train = np.vstack(self._pending_X)
+            y_train = np.concatenate(self._pending_y)
+            for name, step in self.steps[:-1]:
+                X_train = step.transform(X_train)
+            last_step.fit(X_train, y_train)
+            self._active_transformers = deepcopy(self.steps[:-1])
+            self._pending_X.clear()
+            self._pending_y.clear()
+            self._pending_count = 0
+        return self
+
+
 
     def transform(self, data):
         """
@@ -96,7 +160,7 @@ class Pipeline:
         self.fit(data)
         return self.transform(data)
 
-    def predict(self, data):
+    def predict(self, X):
         """
         Use predict if the last step in the pipeline is a predictor. Only works when predictor is the last step
         Parameters:
@@ -106,16 +170,19 @@ class Pipeline:
         Raises:
         ValueError: if the last step is not a predictor yet predict is used
         """
-        last = self.steps[-1][1]
-        if not hasattr(last, "predict"):
-            raise ValueError("Last step must support predict")
+        last_name, model = self.steps[-1]
+        if not hasattr(model, "predict"):
+            raise TypeError("Final step does not support predict")
+        data = X
+        if self._active_transformers is not None:
+            transformers = self._active_transformers
+        else:
+            transformers = self.steps[:-1]
+        for name, step in transformers:
+            data = step.transform(data)
 
-        processed = data
+        return model.predict(data)
 
-        for name, transformer in self.steps[:-1]:
-            processed = transformer.transform(processed)
-
-        return last.predict(processed)
 
 
 
@@ -149,6 +216,22 @@ class FeatureUnion:
         for name, transformer in self.transformers:
             transformer.fit(data)
         return self
+
+    
+    def partial_fit(self, X, y=None):
+        """
+        Incrementally update each transformer branch.
+        """
+        for name, transformer in self.transformers:
+            if not hasattr(transformer, "partial_fit"):
+                raise TypeError(
+                    f"Transformer '{name}' does not support partial_fit"
+                )
+
+            transformer.partial_fit(X)
+
+        return self
+
 
     def transform(self, data):
         """
