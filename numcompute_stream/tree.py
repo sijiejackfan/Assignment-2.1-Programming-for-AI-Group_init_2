@@ -13,3 +13,51 @@
       tree.partial_fit(X_chunk, y_chunk)
   ```
 '''
+
+import numpy as np
+
+
+def gini(y):
+    """
+    Calculate the Gini impurity of classification labels.
+
+    Parameters:
+    y: 1D array of classification labels.
+
+    Returns:
+    float: Gini impurity.
+    """
+    y = np.asarray(y)
+
+    if y.ndim != 1:
+        raise ValueError("Labels must be a 1D array")
+
+    if len(y) == 0:
+        return 0.0
+    _, counts = np.unique(y, return_counts=True)
+    p = counts / len(y)
+    return float(1.0 - np.sum(p ** 2))
+
+
+def entropy(y):
+    """
+    Calculate the entropy of classification labels.
+
+    Parameters:
+    y: 1D array of classification labels.
+
+    Returns:
+    float: Entropy in bits.
+    """
+    y = np.asarray(y)
+
+    if y.ndim != 1:
+        raise ValueError("Labels must be a 1D array")
+
+    if len(y) == 0:
+        return 0.0
+    _, counts = np.unique(y, return_counts=True)
+    p = counts / len(y)
+    p = p[p > 0]
+    return float(-np.sum(p * np.log2(p)))
+
