@@ -94,12 +94,13 @@ def quantile(data, q, axis=0):
 
 class StreamingStats:
 
-    def __init__(self, hist_edges=None):
+    def __init__(self, hist_edges=None, track_quantiles=True):
         self.count = None
         self.mean = None
         self.M2 = None
         self.hist_edges = None
         self.hist_counts = None
+        self.track_quantiles = track_quantiles
         self._quantile_chunks = []
 
         if hist_edges is not None:
@@ -140,7 +141,8 @@ class StreamingStats:
         self.count = total_count
         if self.hist_edges is not None:
             self._update_histogram(X_chunk)
-        self._quantile_chunks.append(X_chunk.copy())
+        if self.track_quantiles:
+            self._quantile_chunks.append(X_chunk.copy())
         return self
 
     

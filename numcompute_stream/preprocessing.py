@@ -16,6 +16,7 @@ https://www.geeksforgeeks.org/machine-learning/ml-one-hot-encoding/
 
 """
 import numpy as np
+from numcompute_stream.stats import StreamingStats
 
 class ColumnSelector:
     """
@@ -171,8 +172,18 @@ class StandardScaler:
     """
 
     def __init__(self):
+        self.stats = StreamingStats(track_quantiles=False)
         self.mean = None
         self.std = None
+
+    def partial_fit(self, data):
+        data = np.asarray(data, dtype=float)
+        if np.isinf(data).any():
+            raise ValueError("Input cannot contain infinity")
+        self.stats.update_stats(data)
+        self.mean = self.stats.mean_result()
+        self.std = self.stats.std()
+        return self
 
     def fit(self, data):
         """
@@ -184,11 +195,8 @@ class StandardScaler:
         Raises:
         ValueError: if dimensions are not 2 
         """
-        if np.ndim(data) != 2:
-            raise ValueError("Input must be 2D")
-        self.mean = np.mean(data, axis = 0)
-        self.std = np.std(data, axis = 0)
-        return self
+        self.stats.reset()
+        return self.partial_fit(data)
 
     def transform(self, data):
         """
@@ -200,11 +208,17 @@ class StandardScaler:
         Raises:
         ValueError: if dimensions are not 2 
         """
-        if np.ndim(data) != 2:
+        if self.mean is None:
+            raise ValueError("StandardScaler must be fitted first")
+        data = np.asarray(data, dtype=float)
+        if data.ndim != 2:
             raise ValueError("Input must be 2D")
+        if data.shape[1] != len(self.mean):
+            raise ValueError("Feature count does not match")
+        if np.isinf(data).any():
+            raise ValueError("Input cannot contain infinity")
         std = np.where(self.std == 0, 1, self.std)
-        transformed = (data - self.mean) / std
-        return transformed
+        return (data - self.mean) / std
 
     def fit_transform(self, data):
         """
@@ -218,6 +232,8 @@ class StandardScaler:
         """
         self.fit(data)
         return self.transform(data)
+
+    
 
 
 
@@ -244,6 +260,31 @@ class MinMaxScaler:
         self.lower = lower
         self.upper = upper
 
+    def partial_fit(self, data):
+        data = np.asarray(data, dtype=float)
+
+        if data.ndim != 2:
+            raise ValueError("Input must be 2D")
+
+        if data.shape[0] == 0 or data.shape[1] == 0:
+            raise ValueError("Input cannot be empty")
+
+        if np.isinf(data).any():
+            raise ValueError("Input cannot contain infinity")
+
+        if self.min is not None and data.shape[1] != len(self.min):
+            raise ValueError("Feature count does not match")
+        chunk_min = np.min(np.where(np.isnan(data), np.inf, data), axis=0)
+        chunk_max = np.max(np.where(np.isnan(data), -np.inf, data),axis=0)
+
+        if self.min is None:
+            self.min = chunk_min
+            self.max = chunk_max
+        else:
+            self.min = np.minimum(self.min, chunk_min)
+            self.max = np.maximum(self.max, chunk_max)
+        return self
+
     def fit(self, data):
         """
         Calculate and store the min and max of each column
@@ -254,11 +295,9 @@ class MinMaxScaler:
         Raises:
         ValueError: if dimensions are not 2 
         """
-        if np.ndim(data) != 2:
-            raise ValueError("Input must be 2D")
-        self.min = np.min(data, axis = 0)
-        self.max = np.max(data, axis = 0)
-        return self
+        self.min = None
+        self.max = None
+        return self.partial_fit(data)
 
     def transform(self, data):
         """
@@ -270,13 +309,27 @@ class MinMaxScaler:
         Raises:
         ValueError: if dimensions are not 2 
         """
-        if np.ndim(data) != 2:
+        if self.min is None:
+            raise ValueError("MinMaxScaler must be fitted first")
+        data = np.asarray(data, dtype=float)
+        
+        if data.ndim != 2:
             raise ValueError("Input must be 2D")
-        data_range = self.max - self.min
+        
+        if data.shape[1] != len(self.min):
+            raise ValueError("Feature count does not match")
+        
+        if np.isinf(data).any():
+            raise ValueError("Input cannot contain infinity")
+        
+        valid = np.isfinite(self.min) & np.isfinite(self.max)
+        data_min = np.where(valid, self.min, 0.0)
+        data_max = np.where(valid, self.max, 0.0)
+        data_range = data_max - data_min
         data_range = np.where(data_range == 0, 1, data_range)
-        transformed = (data - self.min) / data_range
+        transformed = (data - data_min) / data_range
         transformed = transformed * (self.upper - self.lower) + self.lower
-        return transformed
+        return np.where(valid, transformed, np.nan)
 
     def fit_transform(self, data):
         """
