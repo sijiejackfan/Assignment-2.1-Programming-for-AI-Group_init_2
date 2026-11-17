@@ -93,6 +93,22 @@ def quantile(data, q, axis=0):
     return np.nanquantile(data, q, axis=axis)
 
 class StreamingStats:
+    """
+    Calculate and update statistics from numerical data in chunks.
+    The class supports running mean, variance, standard deviation, histogram, and quantile calculations. NaN values are ignored
+    when updating the statistics.
+    Parameters:
+    hist_edges: a 1D array or None, fixed bin edges for the histogram.
+    track_quantiles: bool, whether to store previous chunks for exact quantile calculations (default True).
+    Attributes:
+    count: a 1D array, number of valid values in each column.
+    mean: a 1D array, running mean of each column.
+    M2: a 1D array, accumulated squared differences used for variance.
+    hist_edges: a 1D array or None, histogram bin edges.
+    hist_counts: a 2D array or None, accumulated histogram counts.
+    AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). The code was reviewed and modified
+    to fit the package requirements.
+    """
 
     def __init__(self, hist_edges=None, track_quantiles=True):
         self.count = None
@@ -115,6 +131,16 @@ class StreamingStats:
             self.hist_edges = edges.copy()
 
     def update_stats(self, X_chunk):
+        """
+        Update the running statistics using a new chunk. Uses the previous statistics and the new chunk to update 
+        the mean and variance. NaN values are ignored.
+        Parameters:
+        X_chunk: a 2D numerical array containing new samples.
+        Returns:
+        self: the updated StreamingStats object.
+        Raises:
+        ValueError: if the input is not 2D, is empty, or has a different number of features.
+        """
         X_chunk = np.asarray(X_chunk, dtype=float)
         if X_chunk.ndim != 2:
             raise ValueError("Input must be 2D")
@@ -147,6 +173,12 @@ class StreamingStats:
 
     
     def _update_histogram(self, X_chunk):
+        """
+        Update histogram counts using a new chunk. Values outside the configured bin edges, as well as NaN 
+        and infinite values, are not counted. The last bin includes the rightmost edge.
+        Parameters:
+        X_chunk: a 2D numerical array containing new samples.
+        """
         n_features = X_chunk.shape[1]
         n_bins = len(self.hist_edges) - 1
         if self.hist_counts is None:
@@ -171,6 +203,13 @@ class StreamingStats:
 
 
     def mean_result(self):
+        """
+        Return the running mean of each feature.
+        Returns:
+        A 1D numpy array containing the mean of each feature. Features with no valid values return NaN.
+        Raises:
+        ValueError: if no data has been received.
+        """
         if self.count is None:
             raise ValueError("No data has been received")
 
@@ -178,6 +217,14 @@ class StreamingStats:
 
     
     def histogram_result(self):
+        """
+        Return the accumulated histogram counts and bin edges.
+        Returns:
+        hist_counts: a 2D numpy array containing the counts for each feature and bin.
+        hist_edges: a 1D numpy array containing the histogram bin edges.
+        Raises:
+        ValueError: if histogram edges are not configured or no data has been received.
+        """
         if self.hist_edges is None:
             raise ValueError("Histogram edges are not configured")
 
@@ -189,13 +236,14 @@ class StreamingStats:
     
     def quantile_result(self, q):
         """
-        Calculate exact quantiles from all received chunks.
-
+        Calculate exact quantiles from the stored data chunks. Previous chunks are stored when track_quantiles is True.
+        NaN values are ignored during the calculation.
         Parameters:
-        q: float or array of floats between 0 and 1.
-
+        q: float or array of floats, quantile level(s) between 0 and 1.
         Returns:
-        A NumPy array containing quantiles for each feature.
+        A numpy array containing the requested quantiles for each feature.
+        Raises:
+        ValueError: if no chunks have been stored or q is outside the valid range.
         """
         if not self._quantile_chunks:
             raise ValueError("No data has been received")
@@ -215,7 +263,10 @@ class StreamingStats:
     
     def reset(self):
         """
-        Reset all accumulated statistics.
+        Reset the accumulated statistics and stored chunks. Clears the running mean, variance, histogram counts,
+        and saved quantile data. The histogram edges and track_quantiles setting are kept.
+        Returns:
+        self: the reset StreamingStats object.
         """
         self.count = None
         self.mean = None
@@ -227,10 +278,25 @@ class StreamingStats:
 
 
     def variance(self):
+        """
+        Calculate the running population variance for each feature. Uses the accumulated M2 and valid sample counts.
+        Features with no valid values return NaN.
+        Returns:
+        A 1D numpy array containing the population variance of each feature.
+        Raises:
+        ValueError: if no data has been received.
+        """
         if self.count is None:
             raise ValueError("No data has been received")
 
         return np.divide(self.M2, self.count, out=np.full_like(self.M2, np.nan), where=self.count > 0)
 
     def std(self):
+        """
+        Calculate the running population standard deviation for each feature.
+        Returns:
+        A 1D numpy array containing the standard deviation of each feature. Features with no valid values return NaN.
+        Raises:
+        ValueError: if no data has been received.
+        """
         return np.sqrt(self.variance())

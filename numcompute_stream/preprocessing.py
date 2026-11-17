@@ -50,7 +50,7 @@ class ColumnSelector:
         Find and store the indices of selected columns.
         Parameters:
         data: a 2D numpy array
-        Returns；
+        Returns:
         self: ColumnSelector after fitted
         Raises:
         ValueError: if dimensions are not 2 or doesn't match with column number, or column name not found
