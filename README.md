@@ -1,88 +1,122 @@
-# Assignment-2.1-Programming-for-AI-Group_init_2
+# Assignment-2.2-Programming-for-AI-Sijie Jack Fan-a3236464
 
-## Group Formation
-a3236464 Sijie Fan
+# NumCompute_Stream
 
-a3224110 Santrupth Shivanna
+NumCompute-Stream builds on our NumCompute toolkit from Assignment 2.1. The original package provided functions for CSV loading, preprocessing, statistics, metrics, and pipelines. In this assignment, we have added streaming support so that data can be processed in smaller chunks, instead of loading everything and training the model at once. The project uses Python, NumPy, and Matplotlib.
 
-# NumCompute
+The main additions are incremental preprocessing, a Decision Tree with buffered retraining, streaming classification metrics, and visualisation functions. The examples below follow `demo/stream_demo.ipynb`, which shows how these modules can be used together. The example dataset is synthetic and is only used to demonstrate the package.
 
-NumCompute is a Python toolkit for working with numerical data using NumPy. It includes CSV loading, preprocessing, pipeline composition, statistics, metrics, sorting and searching, ranking, numerical optimisation, and other utility functions.
 
 ## Main Workflow
 
-The normal workflow is:
+The normal streaming workflow is:
 
-1. Load a CSV file with `io.py`.
-2. Select numerical and categorical columns with `ColumnSelector`.
-3. Fill missing values with `SimpleImputer`.
-4. Scale numerical columns and one-hot encode categorical columns.
-5. Use `FeatureUnion` to combine the processed columns.
-6. Optionally pass the features to a user-provided estimator through `Pipeline`.
-7. Use the other modules for statistics, evaluation, and numerical analysis as needed.
+1. Read the CSV using `load_csv_chunks()`.
+2. Create numerical and categorical preprocessing branches with `Pipeline` and `FeatureUnion`.
+3. Add a `DecisionTreeClassifier` as the last step of the pipeline.
+4. Create a `StreamTrainer` to evaluate and train on each chunk.
+5. Read the recorded accuracy, classification metrics, time, and memory information.
+6. Use `visualise.py` to plot the results and compare different buffer sizes.
 
 ### Step 1: Load the CSV file
-In the package, there are two csv read functions provided: load_csv and load_csv_chunks:
-![load_csv](assets/img1.png)
+The `io.py` module provides `load_csv()` and `load_csv_chunks()`, as in Assignment 2.1. Here we use `load_csv_chunks()` because it reads the data in smaller pieces. Each call returns a two-dimensional NumPy string array and the CSV column names.
 
-`load_csv` returns `(data, columns)`. `data` is a 2D NumPy string array, and `columns` contains the CSV header names. Numeric values are initially kept as strings because a regular NumPy array has one data type; they are converted in the numeric preprocessing branch.
+The demo file contains 300 rows with `Age`, `Score`, and `City` as input features, and `Passed` as the binary target (0 or 1). We use 30 rows per chunk, so the file is processed in 10 chunks.
 
-![load_csv_chunks](assets/img2.png)
+The CSV values are initially stored as strings. The numeric columns are converted later in the preprocessing pipeline.
 
-`load_csv_chunks` return the same thing as load_csv, however, it reads data in chunks rather than reading the whole thing at once. This is typically better for larger data, since it can save memory usage.
+![Reading CSV chunks](assets/readme_images/01_csv_chunks.png)
 
-### Step 2 - 5: Create the preprocessing pipeline
+### Step 2: Create the Preprocessing and Model Pipeline
 
-Now with the CSV file loaded, the data can be passed to the pipeline for processing, but users can also choose the manully run the transformers step by step. In here, the step by step way will be demonstrated first, then the full pipeline. For this package, numerical and categorical data will be processed in separate branches of the pipeline, and combined with FeatureUnion. Users will need to specify which columns they want to be processed as numerical, and which columns they want to be processed as categorical, using the ColumnSelector transformer:
+Similar to Assignment 2.1, numerical and categorical data are handled in separate branches. `ColumnSelector` selects the columns for each branch. `SimpleImputer` fills missing numerical values with 0, `StandardScaler` scales the numerical data, and `OneHotEncoder` converts `City` into numerical features.
 
-![Column_Selector](assets/img4.png)
+`FeatureUnion` combines these branches into one feature array. This time, the pipeline also includes our own `DecisionTreeClassifier` at the end. It uses `buffer_size` to decide when the buffered data is large enough to retrain the tree.
 
-Next, data will be passed to the SimpleImputer. This is for filling the missing values in the data, and converting data to the correct types. Users need to specify the type of the data (float or str), and can specify what placeholder they want to use for replace missing:
+In the demo, this structure is put inside `build_pipeline()` so that users can easily create a new pipeline with a different buffer size. During streaming updates, the pipeline also keeps a preprocessing snapshot for the active tree. This means a change in the scaler or a new category does not immediately change the inputs used by an older tree.
 
-![Simple_Imputer](assets/img5.png)
+![Creating the streaming pipeline](assets/readme_images/02_pipeline.png)
 
-Then, users can apply numeric scaling and encoding to the data. This package supports two types of scalers and one encoder: StandScaler and MinMaxScaler for numerical data, and OneHotEncoder for categorical data. For MinMaxScaler, user can also specify the range they want to scale to. 
 
-![Scaler_Encoder](assets/img6.png)
+### Step 3: Set Up Streaming Evaluation
 
-Users may also do the processing together using a pipeline, with the numerical and categorical pipelines combined using FeatureUnion. A full pipeline is shown as below: 
+The `stream.py` module provides `StreamTrainer`, which connects the pipeline with the streaming metrics. Users can call `score_chunk()` to evaluate the current chunk and `fit_chunk()` to update the model.
 
-![create_pipeline](assets/img3.png)
+For the demo, we use test-then-train: each chunk is evaluated with the existing model before it is used for training. This avoids testing a model on the same chunk it has just learned from.
 
-### Step 6 (optional): Add a predictor
+The notebook's `run_stream()` helper reads the chunks from the CSV and performs these calls in order. It also saves predictions for a later comparison with the actual labels. During *cold start*, before the first tree has been trained, the accuracy is recorded as `None` rather than 0.
 
-In this package, there is no predictor provided. However, the pipeline supports predictor APIs, and users may add a predictor on their own. To do so, they can add a predictor at the last step of the pipeline, and pipeline will run the fit() and predict() functions from predictor. The predictor has to contain these functions and be placed at the last step of the pipeline to work. 
+![Test-then-train streaming loop](assets/readme_images/03_stream_loop.png)
 
+### Step 4: Run the Streaming Experiment
+
+The first experiment uses `chunk_size=30` and `buffer_size=60`. After the first two chunks, the buffer has received 60 samples and the tree can be trained for the first time. Predictions start from the third chunk. Once another 60 samples have been collected, the tree is retrained using the new buffered data.
+
+For this 300-row example, the demo processes 10 chunks. With a buffer size of 60, the first two chunks are used for cold start, so 240 samples are evaluated. The model retrains after chunks 2, 4, 6, 8, and 10.
+
+![Streaming training results](assets/readme_images/04_stream_results.png)
+
+### Step 5: Check the Streaming Metrics
+
+In `metrics.py`, `StreamingClassificationMetrics` supports binary classification with labels 0 and 1. Its `update()` method accumulates the confusion matrix, and `result()` returns the current Accuracy, Precision, Recall, and F1. `reset()` clears the accumulated data. It also supports rolling-window metrics over the most recent chunks.
+
+`StreamTrainer` uses these metrics and saves the results in `trainer.history`. Users can read the history to see how the model performed over time, rather than only checking one final accuracy value.
+
+Training time covers the preprocessing and training call for that chunk. The recorded peak memory is measured with Python's `tracemalloc`; it is not the total memory used by the process. As memory tracking adds overhead, these timings should not be treated as controlled benchmark results.
+
+![Streaming metrics history](assets/readme_images/05_metrics_history.png)
+
+### Step 6: Plot Metrics over Time
+
+In this package, `visualise.py` provides `plot_metric_over_time()` for plotting a selected metric from the history. In the demo, we use it to plot per-chunk Accuracy and cumulative F1. The cold-start entries are missing values, so they are not shown as accuracy 0.
+
+The notebook also creates `demo/outputs/cumulative_f1.png`. The output folder is created automatically if it does not already exist.
+
+![Accuracy over time](assets/readme_images/06_streaming_accuracy.png)
+
+![F1 over time](assets/readme_images/07_streaming_f1.png)
+
+### Step 7: Compare Predictions with Ground Truth
+
+Another way to check the classifier is to compare its predictions with the actual labels. `plot_predictions_vs_ground_truth()` takes two arrays: the true labels and the predicted labels. The demo uses the first 40 evaluated samples to keep the plot readable. Samples from cold start are not included, because the model did not make predictions for them.
+
+![Predictions compared with ground truth](assets/readme_images/08_predictions.png)
+
+### Step 8: Compare Different Buffer Sizes
+
+Users can also create a second pipeline with a different `buffer_size` and run the same dataset through it. The demo compares buffer sizes of 60 and 120 using `compare_models()` to plot their cumulative Accuracy.
+
+
+For this example, buffer 60 retrains after chunks 2, 4, 6, 8, and 10, while buffer 120 retrains after chunks 4 and 8. The comparison shows how buffer size changes the training schedule and the metrics. It is a demonstration of the configuration, not yet a controlled performance benchmark.
+
+![Comparing two buffer sizes](assets/readme_images/09_buffer_comparison.png)
 
 ## Input and Output Notes
 
-- The preprocessing examples expect a 2D NumPy array.
-- `load_csv()` preserves CSV values as strings; the numerical `SimpleImputer` branch converts selected values to `float`.
-- Missing numeric entries can be filled with `0`; missing categorical entries can be filled with `"Unknown"`. These are example choices, not required values for all datasets.
-- You must choose the numeric and categorical columns explicitly. The pipeline does not automatically identify feature types.
-- The column names and order for new data must match those used when fitting `ColumnSelector`.
-- `Pipeline` allows transformers in intermediate steps. A predictor, when used, belongs in the last step.
+- `load_csv_chunks()` returns the column names and a 2D string array for each chunk. Select the target column and convert its labels to integers before training.
+- The example uses binary targets, `0` and `1`. The streaming classification metrics in the current implementation use these two labels.
+- The numeric branch fills missing `Age` and `Score` entries with `0` before scaling. This is the demo's choice; users may select different fill values for their data.
+- Users specify numerical and categorical columns with `ColumnSelector`; the pipeline does not identify them automatically.
+- Use `Pipeline.partial_fit()` for streaming updates. The normal `fit()` and `fit_transform()` methods remain available for batch processing.
+- The buffered tree uses its most recently trained model between retraining events. Predictions are unavailable until the first buffer has been trained.
+- The pipeline stores a matching preprocessing snapshot for its active model, including when new categories change the encoded feature count.
+- Plots created by the notebook are saved to `demo/outputs/`.
 
 ## Other Modules
 
-Besides data preprocessing, NumCompute also provides functions for statistics, evaluation, sorting and searching. These functions can be used independently with NumPy arrays.
+Besides the modules shown in the main demo, the package still includes the numerical utilities from Assignment 2.1, such as sorting, searching, ranking, optimisation, and batch statistics.
 
-### Statistics
+### Streaming Statistics
 
-`stats.py` provides functions for calculating basic statistics, including `mean()`, `median()`, `std()`, `minimum()`, `maximum()`, `quantile()`, and `histogram()`.
+`StreamingStats` in `stats.py` can update statistical information as new numerical chunks arrive. It supports running mean and variance, as well as histogram and quantile operations. The incremental scalers also make use of running statistics.
 
-Users can pass numerical arrays to these functions to calculate statistics. `quantile()` calculates values at specified quantiles, while `histogram()` returns the counts and bin edges for a given number of bins.
+### Incremental Preprocessing
 
-![stats](assets/img7.png)
+`preprocessing.py` contains `StandardScaler`, `MinMaxScaler`, `SimpleImputer`, `OneHotEncoder`, and `ColumnSelector`. The streaming versions use `partial_fit()` to update their learned state while retaining the regular batch API.
 
-### Metrics
+### Decision Tree and Metrics
 
-`metrics.py` provides functions for evaluating prediction results, including `accuracy()`, `precision()`, `recall()`, `f1()`, `confusion_matrix()`, and `mse()`.
-
-Users provide the actual values (`y_true`) and predicted values (`y_pred`) to calculate evaluation metrics. The classification metrics use binary labels (0 and 1), while MSE is used for numerical predictions.
-
-![metrics](assets/img8.png)
-
+`tree.py` provides `DecisionTreeClassifier` with Gini or Entropy splitting, depth and sample limits, optional feature selection, and buffered retraining. `metrics.py` provides the binary streaming metrics, cumulative confusion matrix, and rolling-window calculations used by `StreamTrainer`.
 
 ### Sorting and Searching
 
