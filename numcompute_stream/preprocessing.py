@@ -21,10 +21,11 @@ from numcompute_stream.stats import StreamingStats
 class ColumnSelector:
     """
     Let user select specific columns from the processed 2D numpy array. Used for separating numerical and categorical columns for processing
+
     Parameters:
     columns : a string list, names of all columns in the input data. (this would be returned from io result)
     selected : a string list, names of the columns to select.
-    Attributes：
+    Attributes:
     columns : a string list, names of all columns in the input data. (this would be returned from io result)
     selected : a string list, names of the columns to select.
     indices : a int list or None, Indices of selected columns, determined during fit().
@@ -39,8 +40,13 @@ class ColumnSelector:
     
     def partial_fit(self, data):
         """
-        Update the column selection for streaming data.
-        The selected columns remain unchanged across chunks.
+        Update column selection for a new data chunk. The column names and selection remain the same across chunks.
+        Parameters:
+        data: a 2D NumPy array containing the new data chunk.
+        Returns:
+        self: the updated ColumnSelector object.
+        Raises:
+        ValueError: if the input is not 2D, the number of columns does not match, or a selected column cannot be found.
         """
         return self.fit(data)
 
@@ -51,9 +57,9 @@ class ColumnSelector:
         Parameters:
         data: a 2D numpy array
         Returns:
-        self: ColumnSelector after fitted
+        self: the fitted ColumnSelector object.
         Raises:
-        ValueError: if dimensions are not 2 or doesn't match with column number, or column name not found
+        ValueError: if the input is not 2D, the number of columns does not match, or a selected column cannot be found.
         """
         if not np.ndim(data) == 2:
             raise ValueError("dimensions must be 2")
@@ -99,14 +105,20 @@ class ColumnSelector:
 
 class SimpleImputer:
     """
-    Process columns and filled missing values, and transform to float array in needed.
+    Process columns and filled missing values, and transform to float array in needed. 
+    Supports replacing missing values with a constant value or the running mean of each numerical column. 
+    Missing values include empty strings and NaN values.
 
     Parameters:
     fill_value: value used to fill missing, default 0
     dtype: type of the data (string or float). Used to determine what type the array should be
+    strategy: str, "constant" or "mean" (default "constant")
     Attributes:
     fill_value: value used to fill missing, default 0
     dtype: type of the data (string or float). Used to determine what type the array should be
+    strategy: the selected imputation strategy.
+    stats: a StreamingStats object used for the mean strategy.
+    n_features: int or None, number of columns determined during fitting.
     AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). The code was reviewed and modified
     to fit the package requirements.
     """
@@ -126,6 +138,18 @@ class SimpleImputer:
         self.n_features = None
 
     def partial_fit(self, data):
+        """
+        Update the imputer using a new chunk of data.
+        For the mean strategy, the running mean is updated usingthe new numerical values. 
+        For the constant strategy, only the input shape is checked and stored.
+        Parameters:
+        data: a 2D NumPy array containing the new data chunk.
+        Returns:
+        self: the updated SimpleImputer object.
+        Raises:
+        ValueError: if the input is not 2D, is empty, has a different number of columns, or contains infinity
+        when using the mean strategy.
+        """
         data = np.asarray(data)
 
         if data.ndim != 2:
@@ -153,13 +177,14 @@ class SimpleImputer:
 
     def fit(self, data):
         """
-        Do not really do anything, only to fit API
+        Fit the imputer using the provided data. Clears any previous statistics and then processes the
+        input data. For the mean strategy, a new mean is calculated from the provided data.
         Parameters:
-        data: a 2D numpy array
+        data: a 2D NumPy array containing the input data.
         Returns:
-        self: SimpleImputer after fitted
+        self: the fitted SimpleImputer object.
         Raises:
-        ValueError: if dimensions are not 2 
+        ValueError: if the input is not 2D, is empty, or contains invalid numerical values when using the mean strategy.
         """
         self.stats.reset()
         self.n_features = None
@@ -168,13 +193,16 @@ class SimpleImputer:
 
     def transform(self, data):
         """
-        Fill the array with fill values, and convert to the correct data type for further processing
+        Replace missing values using the selected strategy. Numerical data is converted to float. Missing values
+        are replaced with either the constant fill value or the running mean of each column. If a column has no
+        valid values, the mean strategy uses fill_value instead.
         Parameters:
-        data: a 2D numpy array
+        data: a 2D NumPy array containing the input data.
         Returns:
-        a transformed numpy array with filled values and correct data type
+        A 2D NumPy array with missing values filled and converted to the selected data type.
         Raises:
-        ValueError: if dimensions are not 2, type is not float or string
+        ValueError: if the imputer has not been fitted, the input shape does not match, or numerical data contains
+        invalid values or infinity.
         """
         if self.n_features is None:
             raise ValueError("SimpleImputer must be fitted first")
@@ -217,13 +245,16 @@ class SimpleImputer:
 
 class StandardScaler:
     """
-    Process numeric columns and standardize with z-score scaler
+    Process numeric columns and standardize with z-score scaler. Uses the mean and standard deviation of each column to
+    transform the data. Supports incremental updates through StreamingStats, allowing statistics to be updated with
+    new data chunks without resetting previous values.
 
     Parameters:
     none
-    Attributes
-    mean: a numpy array, containing the mean of each column
-    std: a numpy array, containing the standard deviation of each column
+    Attributes:
+    stats: a StreamingStats object used to calculate running statistics.
+    mean: a 1D NumPy array or None, running mean of each column.
+    std: a 1D NumPy array or None, running standard deviation of each column.
     """
 
     def __init__(self):
@@ -232,6 +263,16 @@ class StandardScaler:
         self.std = None
 
     def partial_fit(self, data):
+        """
+        Update the mean and standard deviation using a new data chunk. Uses StreamingStats to combine the new data with the
+        previously calculated statistics. NaN values are ignored when calculating the mean and standard deviation.
+        Parameters:
+        data: a 2D numerical NumPy array containing new samples.
+        Returns:
+        self: the updated StandardScaler object.
+        Raises:
+        ValueError: if the input is not 2D, is empty, or contains infinity.
+        """
         data = np.asarray(data, dtype=float)
         if np.isinf(data).any():
             raise ValueError("Input cannot contain infinity")
@@ -242,7 +283,7 @@ class StandardScaler:
 
     def fit(self, data):
         """
-        Calculate and store the mean and standard deviation of each column
+        Uses partialfit to calculate and store the mean and standard deviation of each column, reset before doing so.
         Parameters:
         data: a 2D numpy array
         Returns:
@@ -255,13 +296,15 @@ class StandardScaler:
 
     def transform(self, data):
         """
-        standardize the input data using the mean and standard deviation
+        Standardize the input data using the stored statistics. Subtracts the running mean and divides by the standard
+        deviation of each column. Columns with zero standard deviation use 1 to avoid division by zero.
         Parameters:
-        data: a 2D numpy array
+        data: a 2D numerical NumPy array to be transformed.
         Returns:
-        a transformed 2D numpy array with standardized values
+        A 2D NumPy array containing the standardized values.
         Raises:
-        ValueError: if dimensions are not 2 
+        ValueError: if the scaler has not been fitted, the input is not 2D, the feature count does not match, or
+        the input contains infinity.
         """
         if self.mean is None:
             raise ValueError("StandardScaler must be fitted first")
@@ -295,12 +338,13 @@ class StandardScaler:
 
 class MinMaxScaler:
     """
-    Process numeric columns and standardize to a given range
+    Process numeric columns and standardize to a given range. Uses the minimum and maximum values of each column to
+    scale the data. Supports incremental updates, allowing the minimum and maximum to be updated with new data chunks.
 
     Parameters:
     lower: lower bound of the standardized range, default 0
     upper: upper bound of the standardized range, default 1
-    Attributes
+    Attributes:
     min: a numpy array, containing the minimum of each column
     max: a numpy array, containing the maximum of each column
     lower: lower bound of the standardized range, default 0
@@ -316,6 +360,17 @@ class MinMaxScaler:
         self.upper = upper
 
     def partial_fit(self, data):
+        """
+        Update the minimum and maximum values using a new data chunk.
+        Compares the new values with the previously stored minimum and maximum of each column. NaN values are
+        ignored when calculating these statistics.
+        Parameters:
+        data: a 2D numerical NumPy array containing new samples.
+        Returns:
+        self: the updated MinMaxScaler object.
+        Raises:
+        ValueError: if the input is not 2D, is empty, has a different number of features, or contains infinity.
+        """
         data = np.asarray(data, dtype=float)
 
         if data.ndim != 2:
@@ -342,7 +397,7 @@ class MinMaxScaler:
 
     def fit(self, data):
         """
-        Calculate and store the min and max of each column
+        Uses partialfit to calculate and store the minimum and maximum of each column, reset before doing so.
         Parameters:
         data: a 2D numpy array
         Returns:
@@ -356,13 +411,15 @@ class MinMaxScaler:
 
     def transform(self, data):
         """
-        standardize the input data using the min and max in the given range
+        Scale the input data using the stored minimum and maximum. Transforms numerical values to the specified range.
+        Columns with zero range use 1 to avoid division by zero. Columns with no valid training values return NaN.
         Parameters:
-        data: a 2D numpy array
+        data: a 2D numerical NumPy array to be transformed.
         Returns:
-        a transformed 2D numpy array with standardized values
+        A 2D NumPy array containing the scaled values.
         Raises:
-        ValueError: if dimensions are not 2 
+        ValueError: if the scaler has not been fitted, the input is not 2D, the feature count does not match, or
+        the input contains infinity.
         """
         if self.min is None:
             raise ValueError("MinMaxScaler must be fitted first")
@@ -392,7 +449,7 @@ class MinMaxScaler:
         Parameters:
         data: a 2D numpy array
         Returns:
-        a transformed 2D numpy array with standardized values
+        A 2D NumPy array containing values scaled to the specified range.
         Raises:
         same as in fit and transform
         """
@@ -403,12 +460,15 @@ class MinMaxScaler:
 
 class OneHotEncoder:
     """
-    Convert categorical data into numerical data using one-hot encoding.
+    Convert categorical data into numerical data using one-hot encoding. Each category is represented by a separate column containing
+    0 or 1. Supports incremental updates, allowing new categories to be added when new data chunks are received.
 
     Parameters:
     none
-    Attributes
+    Attributes:
     categories : a list of numpy arrays, containing unique categories of each column.
+    AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). The code was reviewed and modified
+    to fit the package requirements.
     """
     def __init__(self):
         self.categories = None
@@ -416,6 +476,16 @@ class OneHotEncoder:
 
     
     def partial_fit(self, data):
+        """
+        Update the stored categories using a new data chunk. Finds unique categories in each column and adds any new
+        categories to the existing ones. Previously stored categories are kept.
+        Parameters:
+        data: a 2D NumPy array containing categorical data.
+        Returns:
+        self: the updated OneHotEncoder object.
+        Raises:
+        ValueError: if the input is not 2D, is empty, or has a different number of features.
+        """
         data = np.asarray(data)
 
         if data.ndim != 2:
@@ -443,7 +513,7 @@ class OneHotEncoder:
 
     def fit(self, data):
         """
-        Find and store the unique categories of each column
+        Uses partialfit to find and store the unique categories each column, reset before doing so.
         Parameters:
         data: a 2D numpy array
         Returns:
@@ -456,13 +526,15 @@ class OneHotEncoder:
 
     def transform(self, data):
         """
-        Convert categorical columns into one-hot encoded numerical arrays, then the encoded columns are combined into a single 2D array.
+        Convert categorical data into one-hot encoded columns. Each stored category is represented by a separate binary
+        column. Categories not seen during fitting are encoded as zeros for that input feature.
         Parameters:
-        data: a 2D numpy array
+        data: a 2D NumPy array containing categorical data.
         Returns:
-        a 2d int array with shape (n_samples, n_features), each value is either 0 or 1.
+        A 2D integer NumPy array containing the encoded data,
+        with one output column for each stored category.
         Raises:
-        ValueError: if dimensions are not 2 or input shape do not match, or encoder is not fitted
+        ValueError: if the encoder has not been fitted, the input is not 2D, or the number of features does not match.
         """
         if self.categories is None:
             raise ValueError("OneHotEncoder must be fitted first")
@@ -482,7 +554,7 @@ class OneHotEncoder:
         Parameters:
         data: a 2D numpy array
         Returns:
-        a 2d int array with shape (n_samples, n_features), each value is either 0 or 1.
+        A 2D integer NumPy array containing the one-hot encoded data, with one output column for each stored category.
         Raises:
         same as in fit and transform
         """

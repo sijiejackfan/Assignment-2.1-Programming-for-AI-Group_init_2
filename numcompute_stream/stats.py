@@ -97,6 +97,7 @@ class StreamingStats:
     Calculate and update statistics from numerical data in chunks.
     The class supports running mean, variance, standard deviation, histogram, and quantile calculations. NaN values are ignored
     when updating the statistics.
+    
     Parameters:
     hist_edges: a 1D array or None, fixed bin edges for the histogram.
     track_quantiles: bool, whether to store previous chunks for exact quantile calculations (default True).
@@ -106,6 +107,8 @@ class StreamingStats:
     M2: a 1D array, accumulated squared differences used for variance.
     hist_edges: a 1D array or None, histogram bin edges.
     hist_counts: a 2D array or None, accumulated histogram counts.
+    Source:
+    https://numpy.org/doc/stable/reference/generated/numpy.searchsorted.html
     AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). The code was reviewed and modified
     to fit the package requirements.
     """
