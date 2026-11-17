@@ -3,6 +3,10 @@
 - Implements `StreamTrainer`, managing model + pipeline + logging
 - Supports `.fit_chunk(X, y)` and `.score_chunk(X, y)` logic
 - Logs per-chunk metrics, memory footprint, and cumulative accuracy
+Sources:
+https://docs.python.org/3/library/time.html
+https://docs.python.org/3/library/tracemalloc.html
+https://riverml.xyz/latest/api/evaluate/progressive-val-score
 '''
 
 import numpy as np
@@ -12,8 +16,19 @@ from .metrics import StreamingClassificationMetrics
 
 
 class StreamTrainer:
+
     """
-    Manage chunk-by-chunk training and evaluation.
+    Manage chunk-by-chunk training and evaluation for a streaming pipeline. Uses the existing model to evaluate each chunk before training.
+    Records per-chunk accuracy, cumulative classification metrics, training time, and memory usage.
+
+    Parameters:
+    pipeline: a Pipeline object containing the preprocessing steps and a DecisionTreeClassifier.
+    Attributes:
+    pipeline: the pipeline used for training and prediction.
+    metrics: a StreamingClassificationMetrics object used to accumulate classification results.
+    history: a list of dictionaries containing the recorded results for each chunk.
+    AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). The code was reviewed and modified
+    to fit the package requirements.
     """
 
     def __init__(self, pipeline):
@@ -25,8 +40,15 @@ class StreamTrainer:
 
     def fit_chunk(self, X, y):
         """
-        Train on one chunk and record time and memory usage.
+        Train the pipeline using a new data chunk. Calls partial_fit() to update the pipeline and records
+        the training time and peak memory usage. The results are added to the most recent history record if one exists.
+        Parameters:
+        X: a 2D NumPy array containing the input features.
+        y: a 1D array containing the classification labels.
+        Returns:
+        self: the updated StreamTrainer object.
         """
+
         tracemalloc.start()
         start = time.perf_counter()
 
@@ -45,7 +67,15 @@ class StreamTrainer:
 
     def score_chunk(self, X, y):
         """
-        Evaluate a chunk using the current model.
+        Evaluate a new data chunk using the current trained model. Calculates the accuracy for the current chunk and updates
+        the cumulative Accuracy, Precision, Recall, and F1 scores. If the model has not been trained yet, the metrics are
+        recorded as None and no predictions are made.
+        Parameters:
+        X: a 2D NumPy array containing the input features.
+        y: a 1D array containing the true classification labels.
+        Returns:
+        dict: a record containing the chunk number, per-chunk accuracy, cumulative metrics, training time, and peak
+        memory usage. Training time and memory are initially None until fit_chunk() updates the record.
         """
         model = self.pipeline.steps[-1][1]
         result = {

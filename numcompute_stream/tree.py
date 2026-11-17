@@ -12,6 +12,8 @@
   for X_chunk, y_chunk in stream:
       tree.partial_fit(X_chunk, y_chunk)
   ```
+Sources: 
+the provided materials for tree
 '''
 
 import numpy as np
@@ -20,10 +22,8 @@ import numpy as np
 def gini(y):
     """
     Calculate the Gini impurity of classification labels.
-
     Parameters:
-    y: 1D array of classification labels.
-
+    y: 1D array of non-negative classification labels.
     Returns:
     float: Gini impurity.
     """
@@ -38,10 +38,8 @@ def gini(y):
 def entropy(y):
     """
     Calculate the entropy of classification labels.
-
     Parameters:
-    y: 1D array of classification labels.
-
+    y: 1D array of non-negative classification labels.
     Returns:
     float: Entropy in bits.
     """
@@ -55,6 +53,20 @@ def entropy(y):
 
 
 def information_gain(y, mask, criterion="gini"):
+    """
+    Calculate the information gain of a proposed data split. Compares the impurity before and after splitting the labels
+    into two groups. Supports Gini and Entropy as the criterion.
+    Parameters:
+    y: a 1D array of non-negative integer classification labels.
+    mask: a 1D boolean array indicating which samples belong to the left group.
+    criterion: str, "gini" or "entropy" (default "gini").
+    Returns:
+    float: the reduction in impurity after the split.
+    Returns 0 if the split does not separate the samples.
+    Raises:
+    ValueError: if the inputs are not 1D, have different shapes, or the criterion is invalid.
+    TypeError: if the mask is not boolean.
+    """
     y = np.asarray(y)
     mask = np.asarray(mask)
     if y.ndim != 1 or mask.ndim != 1:
@@ -86,9 +98,15 @@ def information_gain(y, mask, criterion="gini"):
 
 class Node:
     """
-    A decision tree node, either an internal node
-    containing a split condition or a leaf node
+    A decision tree node, either an internal node containing a split condition or a leaf node
     containing a prediction label.
+
+    Attributes:
+    feature: int or None, index of the feature used for splitting.
+    threshold: float or None, threshold used for splitting.
+    left: Node or None, left child node.
+    right: Node or None, right child node.
+    label: int or None, encoded prediction label for a leaf node.
     """
 
     def __init__(self, feature=None, threshold=None,
@@ -102,6 +120,35 @@ class Node:
 
 
 class DecisionTreeClassifier:
+    """
+    Train and use a Decision Tree for classification. Supports Gini and Entropy splitting, maximum depth,
+    minimum samples for splitting, and optional random feature selection. Streaming training is supported through buffered
+    retraining using partial_fit().
+
+    Parameters:
+    max_depth: int, maximum depth of the tree (default 5).
+    min_samples_split: int, minimum samples required to split a node (default 2).
+    max_features: int or None, maximum number of randomly selected features considered at each split (default None).
+    buffer_size: int, minimum samples required to trigger retraining (default 500).
+    criterion: str, "gini" or "entropy" (default "gini").
+    Attributes:
+    max_depth: maximum depth of the tree.
+    min_samples_split: minimum number of samples required for splitting.
+    max_features: number of features considered at each split.
+    buffer_size: number of buffered samples required for retraining.
+    criterion: selected impurity criterion.
+    classes: a NumPy array or None, original classification labels.
+    n_features: int or None, number of input features.
+    root: Node or None, root of the trained decision tree.
+    _X_buffer: a list of buffered feature arrays.
+    _y_buffer: a list of buffered label arrays.
+    _buffer_count: int, number of samples currently buffered.
+    retrain_count: int, number of retraining events triggered by partial_fit().
+    random_state: int, seed used for random feature selection.
+    AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). The code was reviewed and modified
+    to fit the package requirements.
+    """
+
     def __init__(self, max_depth=5, min_samples_split=2,
                  max_features=None, buffer_size=500,
                  criterion="gini"):
@@ -142,9 +189,19 @@ class DecisionTreeClassifier:
     
     def _best_split(self, X, y):
         """
-        Find the feature and threshold with the
-        highest information gain.
+        Find the feature and threshold with the highest information gain. Checks possible split thresholds for each selected feature.
+        If max_features is set, only a random subset of features is considered. NaN values are excluded when finding thresholds.
+        Parameters:
+        X: a 2D NumPy array containing numerical features.
+        y: a 1D array of encoded integer classification labels.
+        Returns:
+        best_feature: int or None, index of the selected feature.
+        best_threshold: float or None, threshold for the selected split.
+        best_gain: float, highest information gain found. Returns None for the feature and threshold if no useful split is found.
+        Raises:
+        ValueError: if the input dimensions or shapes are invalid, the input is empty, or features contain infinity.
         """
+
         X = np.asarray(X, dtype=float)
         y = np.asarray(y)
 
@@ -230,14 +287,20 @@ class DecisionTreeClassifier:
     
     def partial_fit(self, X_chunk, y_chunk):
         """
-        Add a chunk to the training buffer.
+        Add a new data chunk to the training buffer. Stores the input features and labels until the number
+        of buffered samples reaches buffer_size. The tree is then retrained from scratch using the buffered data, and the
+        buffer is cleared. Between retraining events, predictions continue using the most recently trained tree.
 
-        Retrain the decision tree when the buffer reaches
-        buffer_size, then clear the buffer.
-
+        Parameters:
+        X_chunk: a 2D NumPy array containing numerical features.
+        y_chunk: a 1D array containing classification labels.
         Returns:
-        self: updated DecisionTreeClassifier.
+        self: the updated DecisionTreeClassifier object.
+        Raises:
+        ValueError: if input dimensions or sample counts do not match, the chunk is empty, the feature count changes, or
+        the input contains invalid numerical values.
         """
+
         X_chunk = np.asarray(X_chunk, dtype=float)
         y_chunk = np.asarray(y_chunk)
 
@@ -281,14 +344,16 @@ class DecisionTreeClassifier:
     
     def fit(self, X, y):
         """
-        Train a decision tree from scratch.
-
+        Train a decision tree from scratch. Encodes the classification labels, builds the tree recursively,
+        and stores the trained model. Clears any previously buffered training data after fitting
         Parameters:
         X: 2D array of numerical features.
         y: 1D array of classification labels.
-
         Returns:
         self: fitted DecisionTreeClassifier.
+        Raises:
+        ValueError: if input dimensions or sample counts do not match, the training data is empty, X contains infinity, or
+        numerical labels contain NaN or infinity.
         """
         X = np.asarray(X, dtype=float)
         y = np.asarray(y)
@@ -325,12 +390,12 @@ class DecisionTreeClassifier:
     def predict(self, X):
         """
         Predict classification labels using the trained tree.
-
         Parameters:
         X: 2D array of numerical features.
-
         Returns:
         1D NumPy array of predicted labels.
+        Raises:
+        ValueError: if the tree has not been trained, the input is not 2D, the feature count does not match, or the input contains infinity.
         """
         if self.root is None:
             raise ValueError("Decision tree must be fitted first")

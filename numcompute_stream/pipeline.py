@@ -11,7 +11,10 @@ Transformer/Estimator API, Compose, FeatureUnion
     ('encode', OneHotEncoder())
   ])
   X_tr = pipe.fit_transform(X)
-
+Sources: 
+https://docs.python.org/3/library/copy.html
+https://scikit-learn.org/stable/common_pitfalls.html
+https://scikit-learn.org/stable/computing/scaling_strategies.html
 """
 import numpy as np
 from copy import deepcopy
@@ -22,8 +25,12 @@ class Pipeline:
 
     Parameters:
     steps: a list of tuples containing the name and transformer object for each step.
-    Attributes：
+    Attributes:
     steps: a list of tuples containing the name and transformer object for each step.
+    _pending_X: a list of arrays containing buffered input chunks.
+    _pending_y: a list of arrays containing buffered target values.
+    _pending_count: int, number of samples currently buffered.
+    _active_transformers: a copied list of transformers or None, used to keep preprocessing consistent with the active model.
     Raises:
     ValueError: if the steps list is empty.
     AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). The code was reviewed and modified
@@ -41,7 +48,8 @@ class Pipeline:
 
     def fit(self, data, y=None):
         """
-        Fit all transformers in the pipeline in order. Or predictor for the last step. 
+        Fit all transformers in the pipeline in order. Or predictor for the last step. Clears any pending streaming data before fitting.
+        For a predictor pipeline, saves a copy of the fitted preprocessing steps for later predictions.
         Parameters:
         data: a 2D numpy array
         y: target values required when the last step is an estimator.
@@ -76,6 +84,21 @@ class Pipeline:
     
 
     def partial_fit(self, X, y=None):
+        """
+        Update the pipeline using a new data chunk. 
+        For transformer-only pipelines, updates each transformer using partial_fit() in order.
+        For predictor pipelines, updates preprocessing and buffers the original input chunks and labels. Once the buffer reaches
+        the required size, all buffered data is transformed using the latest preprocessing state and the estimator is retrained.
+        A deep copy of the preprocessing steps is then saved for consistent predictions until the next retraining.
+        Parameters:
+        X: a 2D NumPy array containing the new input chunk.
+        y: a 1D array containing target values, required for estimators.
+        Returns:
+        self: the updated Pipeline object.
+        Raises:
+        ValueError: if labels are missing, input dimensions are invalid, chunk sizes do not match, or the feature count changes.
+        TypeError: if the estimator does not support buffered training.
+        """
         last_name, last_step = self.steps[-1]
         if hasattr(last_step, "transform"):
             data = X
@@ -162,13 +185,14 @@ class Pipeline:
 
     def predict(self, X):
         """
-        Use predict if the last step in the pipeline is a predictor. Only works when predictor is the last step
+        Make predictions using the estimator in the last pipeline step. Transforms the input using the preprocessing snapshot
+        saved when the active model was trained. If no snapshot exists, uses the current preprocessing steps.
         Parameters:
-        data: a 2D numpy array
+        X: a 2D NumPy array containing input data.
         Returns:
-        predicted values using the given predict() API from predictor
+        Predicted values returned by the final estimator.
         Raises:
-        ValueError: if the last step is not a predictor yet predict is used
+        TypeError: if the last step does not support predict().
         """
         last_name, model = self.steps[-1]
         if not hasattr(model, "predict"):
@@ -220,7 +244,15 @@ class FeatureUnion:
     
     def partial_fit(self, X, y=None):
         """
-        Incrementally update each transformer branch.
+        Incrementally update each transformer branch using a new data chunk.
+        Each branch receives the same input data and updates its own preprocessing state.
+        Parameters:
+        X: a 2D NumPy array containing the new data chunk.
+        y: optional target values, not used by the transformer branches.
+        Returns:
+        self: the updated FeatureUnion object.
+        Raises:
+        TypeError: if any transformer does not support partial_fit().
         """
         for name, transformer in self.transformers:
             if not hasattr(transformer, "partial_fit"):
