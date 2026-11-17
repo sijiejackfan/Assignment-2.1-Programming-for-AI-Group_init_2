@@ -8,7 +8,7 @@ from numcompute_stream.io import load_csv, load_csv_chunks
 '''
 AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). AI helped was used for creating some test cases and generate the data for testing.
 '''
-file = Path(__file__).resolve().parent.parent / "assets" / "students.csv"
+file = Path(__file__).resolve().parents[2] / "assets" / "students.csv"
 
 def test_load_csv():
     data, columns = load_csv(file)
