@@ -54,7 +54,7 @@ The first experiment uses `chunk_size=30` and `buffer_size=60`. After the first 
 
 For this 300-row example, the demo processes 10 chunks. With a buffer size of 60, the first two chunks are used for cold start, so 240 samples are evaluated. The model retrains after chunks 2, 4, 6, 8, and 10.
 
-![Streaming training results](assets/readme_images/04_stream_results.png)
+![Streaming training results](assets/readme_images/04_stream_result.png)
 
 ### Step 5: Check the Streaming Metrics
 
@@ -89,7 +89,7 @@ Users can also create a second pipeline with a different `buffer_size` and run t
 
 For this example, buffer 60 retrains after chunks 2, 4, 6, 8, and 10, while buffer 120 retrains after chunks 4 and 8. The comparison shows how buffer size changes the training schedule and the metrics. It is a demonstration of the configuration, not yet a controlled performance benchmark.
 
-![Comparing two buffer sizes](assets/readme_images/09_buffer_comparison.png)
+![Comparing two buffer sizes](assets/readme_images/09_buffer_comparsion.png)
 
 ## Input and Output Notes
 

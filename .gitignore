@@ -43,3 +43,5 @@ Thumbs.db
 *.temp
 *.bak
 *~
+# Generated demo plots
+demo/outputs/
