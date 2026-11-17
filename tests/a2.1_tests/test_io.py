@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from numcompute.io import load_csv, load_csv_chunks
+from numcompute_stream.io import load_csv, load_csv_chunks
 
 '''
 AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). AI helped was used for creating some test cases and generate the data for testing.

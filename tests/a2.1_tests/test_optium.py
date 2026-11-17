@@ -1,6 +1,6 @@
 """Tests for gradient and Jacobian calculations"""
 
-from numcompute.optim import gradient, jacobian
+from numcompute_stream.optim import gradient, jacobian
 import numpy as np
 
 

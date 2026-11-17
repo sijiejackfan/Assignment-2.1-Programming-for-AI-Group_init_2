@@ -1,6 +1,6 @@
 import numpy as np
-from numcompute.pipeline import Pipeline, FeatureUnion
-from numcompute.preprocessing import (
+from numcompute_stream.pipeline import Pipeline, FeatureUnion
+from numcompute_stream.preprocessing import (
     ColumnSelector,
     SimpleImputer,
     StandardScaler,

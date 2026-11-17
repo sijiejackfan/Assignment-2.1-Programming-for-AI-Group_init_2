@@ -1,7 +1,7 @@
 """Tests for sorting and searching."""
 
 import pytest
-from numcompute.sort_search import (
+from numcompute_stream.sort_search import (
     stable_sort, quick_sort, merge_sort, topk,
     top_p, quickselect, binary_search
 )
