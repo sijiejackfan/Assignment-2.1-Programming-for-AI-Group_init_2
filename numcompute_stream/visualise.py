@@ -10,6 +10,8 @@
 Source: 
 https://matplotlib.org/stable/users/explain/quick_start.html
 https://matplotlib.org/stable/gallery/index.html
+AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). The code was reviewed and modified
+to fit the package requirements.
 '''
 
 import numpy as np
@@ -18,8 +20,19 @@ import matplotlib.pyplot as plt
 
 def plot_metric_over_time(history, metric="accuracy", save_path=None):
     """
-    Plot a streaming metric across data chunks.
+    Plot a streaming metric across data chunks. Uses the recorded history to display how a selected metric
+    changes over time. Missing metric values are treated as NaN and are not plotted.
+    Parameters:
+    history: a list of dictionaries containing recorded streaming metrics.
+    metric: str, name of the metric to plot (default "accuracy").
+    save_path: str or None, path to save the figure (default None).
+    Returns:
+    fig: a Matplotlib Figure object containing the plot.
+    Raises:
+    ValueError: if the history is empty.
+    KeyError: if the selected metric or chunk number is not in the history.
     """
+
     if not history:
         raise ValueError("History cannot be empty")
 
@@ -48,8 +61,19 @@ def plot_metric_over_time(history, metric="accuracy", save_path=None):
 
 def compare_models(histories, metric="accuracy", save_path=None):
     """
-    Compare streaming metrics from multiple models.
+    Compare streaming metrics from multiple models. Plots the selected metric from each model's history
+    on the same figure. Each model is displayed as a separate line to show the differences across data chunks.
+    Parameters:
+    histories: a dictionary containing model names as keys and their streaming history lists as values.
+    metric: str, name of the metric to compare (default "accuracy").
+    save_path: str or None, path to save the figure (default None).
+    Returns:
+    fig: a Matplotlib Figure object containing the comparison plot.
+    Raises:
+    ValueError: if the histories dictionary is empty.
+    KeyError: if the selected metric or chunk number is missing from a history record.
     """
+
     if not histories:
         raise ValueError("Histories cannot be empty")
 
@@ -78,12 +102,20 @@ def compare_models(histories, metric="accuracy", save_path=None):
     return fig
 
 
-def plot_predictions_vs_ground_truth(
-    y_true, y_pred, save_path=None
-):
+def plot_predictions_vs_ground_truth(y_true, y_pred, save_path=None):
     """
-    Compare predicted and actual binary class labels.
+    Compare predicted and actual binary classification labels. Plots the true labels and predicted labels for each sample
+    to show where the model makes correct or incorrect predictions. Only binary labels 0 and 1 are supported.
+    Parameters:
+    y_true: a 1D array containing the actual classification labels.
+    y_pred: a 1D array containing the predicted classification labels.
+    save_path: str or None, path to save the figure (default None).
+    Returns:
+    fig: a Matplotlib Figure object containing the comparison plot.
+    Raises:
+    ValueError: if the inputs are not 1D, have different shapes, are empty, or contain labels other than 0 and 1.
     """
+
     y_true = np.asarray(y_true)
     y_pred = np.asarray(y_pred)
 
