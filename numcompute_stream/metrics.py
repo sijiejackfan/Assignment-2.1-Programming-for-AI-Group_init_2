@@ -301,17 +301,19 @@ class StreamingClassificationMetrics:
 
     
     def _calculate_metrics(self, matrix):
+        """
+        Calculate classification metrics from a confusion matrix.
+        Parameters:
+        matrix: a 2D NumPy array containing TN, FP, FN, and TP.
+        Returns:
+        dict: a dictionary containing accuracy, precision, recall, F1, and the confusion matrix.
+        """
         tn, fp = matrix[0]
         fn, tp = matrix[1]
-
         total = tn + fp + fn + tp
-
         accuracy = (tp + tn) / total if total > 0 else 0.0
-
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-
         f1 = (
             2 * precision * recall / (precision + recall)
             if (precision + recall) > 0 else 0.0
@@ -329,6 +331,14 @@ class StreamingClassificationMetrics:
 
 
     def result(self):
+        """
+        Return the cumulative classification metrics. Calculates ROC-AUC if prediction scores have been provided
+        and both classes are present.
+        Returns:
+        dict: a dictionary containing cumulative accuracy, precision,
+        recall, F1, confusion matrix, and ROC-AUC.
+        ROC-AUC is None if it cannot be calculated.
+        """
         result = self._calculate_metrics(self.matrix)
         auc_value = None
         if self._auc_true:
@@ -341,6 +351,16 @@ class StreamingClassificationMetrics:
 
     
     def rolling_result(self):
+        """
+        Calculate classification metrics over the most recent chunks.
+        Parameters:
+        None
+        Returns:
+        dict: a dictionary containing rolling accuracy, precision,
+        recall, F1, and confusion matrix.
+        Raises:
+        ValueError: if rolling window is not enabled.
+        """
         if self.window_size is None:
             raise ValueError("Rolling window is not enabled")
         if not self._window:
@@ -352,6 +372,12 @@ class StreamingClassificationMetrics:
 
 
     def reset(self):
+        """
+        Reset all accumulated classification metrics. Clears the confusion matrix, rolling window, 
+        and stored labels and prediction scores used for ROC-AUC.
+        Returns:
+        self: the reset StreamingClassificationMetrics object.
+        """
         self.matrix.fill(0)
         self._window.clear()
         self._auc_true.clear()
