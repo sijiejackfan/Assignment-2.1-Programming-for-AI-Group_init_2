@@ -240,6 +240,8 @@ class StreamingClassificationMetrics:
     _window: a deque containing confusion matrices for recent chunks.
     _auc_true: a list of true-label arrays from chunks with scores.
     _auc_scores: a list of corresponding prediction-score arrays.
+    AI Assistance: The implementation was adapted from code suggestions provided by ChatGPT (OpenAI, 2026). The code was reviewed and modified
+    to fit the package requirements.
     """
 
     def __init__(self, window_size=None):

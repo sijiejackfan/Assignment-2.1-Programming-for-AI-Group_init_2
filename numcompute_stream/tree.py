@@ -189,6 +189,21 @@ class DecisionTreeClassifier:
     
     def _best_split(self, X, y):
         """
+        Find the best split using the selected implementation.
+        Parameters:
+        X: a 2D NumPy array containing numerical features.
+        y: a 1D array containing encoded classification labels.
+        Returns:
+        best_feature: index of the selected feature.
+        best_threshold: threshold of the selected split.
+        best_gain: information gain of the selected split.
+        """
+        return self._best_split_vectorized(X, y)
+
+
+    
+    def _best_split_loop(self, X, y):
+        """
         Find the feature and threshold with the highest information gain. Checks possible split thresholds for each selected feature.
         If max_features is set, only a random subset of features is considered. NaN values are excluded when finding thresholds.
         Parameters:
@@ -250,6 +265,97 @@ class DecisionTreeClassifier:
                     best_threshold = threshold
 
         return best_feature, best_threshold, best_gain
+
+
+    
+    def _best_split_vectorized(self, X, y):
+        """
+        Find the best split using NumPy vectorized calculations.
+        Parameters:
+        X: a 2D NumPy array containing numerical features.
+        y: a 1D array of encoded integer classification labels.
+        Returns:
+        best_feature: index of the selected feature.
+        best_threshold: threshold of the selected split.
+        best_gain: highest information gain found.
+        Raises:
+        ValueError: if input dimensions or shapes are invalid, the input is empty, or features contain infinity.
+        """
+        X = np.asarray(X, dtype=float)
+        y = np.asarray(y)
+
+        if X.ndim != 2 or y.ndim != 1:
+            raise ValueError("Invalid input dimensions")
+
+        if X.shape[0] != len(y) or X.size == 0:
+            raise ValueError("Invalid input shape")
+
+        if np.isinf(X).any():
+            raise ValueError("Features cannot contain infinity")
+        best_feature = None
+        best_threshold = None
+        best_gain = 0.0
+        n_samples, n_features = X.shape
+        if self.max_features is None:
+            selected_features = np.arange(n_features)
+        else:
+            n_selected = min(self.max_features, n_features)
+            selected_features = np.sort(self._rng.choice(n_features, size=n_selected, replace=False))
+        total_counts = np.bincount(y)
+        n_classes = len(total_counts)
+
+        if self.criterion == "gini":
+            before = gini(y)
+        else:
+            before = entropy(y)
+
+        for f in selected_features:
+            values = X[:, f]
+            valid = ~np.isnan(values)
+            order = np.argsort(values[valid], kind="stable")
+            sorted_values = values[valid][order]
+            sorted_y = y[valid][order]
+            cuts = np.flatnonzero(np.diff(sorted_values) > 0)
+            if cuts.size == 0:
+                continue
+
+            thresholds = (sorted_values[cuts] + sorted_values[cuts + 1]) / 2
+            left_n = cuts + 1
+            right_n = n_samples - left_n
+            one_hot = np.eye(n_classes, dtype=int)[sorted_y]
+            left_counts = np.cumsum(one_hot, axis=0)[cuts]
+            right_counts = total_counts - left_counts
+
+            left_p = left_counts / left_n[:, None]
+            right_p = right_counts / right_n[:, None]
+
+            if self.criterion == "gini":
+                left_imp = 1.0 - np.sum(left_p ** 2, axis=1)
+                right_imp = 1.0 - np.sum(right_p ** 2, axis=1)
+            else:
+                left_imp = -np.sum(
+                    left_p * np.log2(np.where(left_p > 0, left_p, 1)),
+                    axis=1
+                )
+                right_imp = -np.sum(
+                    right_p * np.log2(np.where(right_p > 0, right_p, 1)),
+                    axis=1
+                )
+
+            gains = before - (
+                left_n * left_imp + right_n * right_imp
+            ) / n_samples
+            index = np.flatnonzero(
+                gains >= np.max(gains) - 1e-12
+            )[0]
+
+            if gains[index] > best_gain + 1e-12:
+                best_gain = float(gains[index])
+                best_feature = f
+                best_threshold = thresholds[index]
+
+        return best_feature, best_threshold, best_gain
+
 
     
     def _build(self, X, y, depth):

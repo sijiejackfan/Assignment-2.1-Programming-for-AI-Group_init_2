@@ -81,3 +81,32 @@ def test_tree_predict_proba_not_fitted():
     with pytest.raises(ValueError):
         tree.predict_proba([[1]])
 
+
+def test_best_split_vectorized():
+    tree = DecisionTreeClassifier()
+
+    X = np.array([[1], [2], [3], [4]])
+    y = np.array([0, 0, 1, 1])
+
+    loop_result = tree._best_split_loop(X, y)
+    vector_result = tree._best_split_vectorized(X, y)
+
+    assert loop_result[0] == vector_result[0]
+    assert np.isclose(loop_result[1], vector_result[1])
+    assert np.isclose(loop_result[2], vector_result[2])
+
+
+def test_best_split_vectorized_nan():
+    X = np.array([[1], [1], [2], [3], [4], [np.nan]])
+    y = np.array([0, 0, 0, 1, 1, 1])
+
+    for criterion in ["gini", "entropy"]:
+        tree = DecisionTreeClassifier(criterion=criterion)
+
+        loop_result = tree._best_split_loop(X, y)
+        vector_result = tree._best_split_vectorized(X, y)
+
+        assert loop_result[0] == vector_result[0]
+        assert np.isclose(loop_result[1], vector_result[1])
+        assert np.isclose(loop_result[2], vector_result[2])
+
