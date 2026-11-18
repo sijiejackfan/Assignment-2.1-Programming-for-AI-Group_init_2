@@ -207,6 +207,32 @@ class Pipeline:
 
         return model.predict(data)
 
+    
+    def predict_proba(self, X):
+        """
+        Predict class probabilities using the final estimator. Uses the saved preprocessing snapshot if available,
+        keeping the input transformation consistent with the active trained model.
+        Parameters:
+        X: a 2D NumPy array containing input data.
+        Returns:
+        A 2D NumPy array containing predicted class probabilities.
+        Raises:
+        TypeError: if the final estimator does not support predict_proba().
+        """
+        last_name, model = self.steps[-1]
+        if not hasattr(model, "predict_proba"):
+            raise TypeError("Final step does not support predict_proba")
+        data = X
+        if self._active_transformers is not None:
+            transformers = self._active_transformers
+        else:
+            transformers = self.steps[:-1]
+        for name, step in transformers:
+            data = step.transform(data)
+
+        return model.predict_proba(data)
+
+
 
 
 

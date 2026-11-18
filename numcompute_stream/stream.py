@@ -85,6 +85,7 @@ class StreamTrainer:
             "cumulative_precision": None,
             "cumulative_recall": None,
             "cumulative_f1": None,
+            "cumulative_auc": None,
             "training_time": None,
             "peak_memory_mb": None
         }
@@ -93,13 +94,20 @@ class StreamTrainer:
             return result
         y_true = np.asarray(y)
         y_pred = self.pipeline.predict(X)
+        probabilities = self.pipeline.predict_proba(X)
+        classes = np.asarray(model.classes)
+        if 1 in classes:
+            positive_index = np.where(classes == 1)[0][0]
+            y_score = probabilities[:, positive_index]
+        else:
+            y_score = np.zeros(len(y_true))
         result["accuracy"] = float(np.mean(y_true == y_pred))
-        self.metrics.update(y_true, y_pred)
+        self.metrics.update(y_true, y_pred, y_score)
         metrics_result = self.metrics.result()
         result["cumulative_accuracy"] = metrics_result["accuracy"]
         result["cumulative_precision"] = metrics_result["precision"]
         result["cumulative_recall"] = metrics_result["recall"]
         result["cumulative_f1"] = metrics_result["f1"]
+        result["cumulative_auc"] = metrics_result["auc"]
         self.history.append(result)
-
         return result

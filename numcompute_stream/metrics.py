@@ -230,8 +230,16 @@ def roc_auc_score(y_true, y_score):
 
 class StreamingClassificationMetrics:
     """
-    Accumulate classification metrics across data chunks.
-    Currently supports binary labels (0 and 1).
+    Accumulate classification metrics across data chunks. Supports binary labels 0 and 1. Calculates cumulative accuracy,
+    precision, recall, F1, and ROC-AUC when prediction scores are supplied. Rolling-window classification metrics use the most recent chunks.
+
+    Parameters:
+    window_size: int or None, number of chunks kept for rolling metrics.
+    Attributes:
+    matrix: a 2D NumPy array containing cumulative confusion matrix counts.
+    _window: a deque containing confusion matrices for recent chunks.
+    _auc_true: a list of true-label arrays from chunks with scores.
+    _auc_scores: a list of corresponding prediction-score arrays.
     """
 
     def __init__(self, window_size=None):
@@ -243,30 +251,53 @@ class StreamingClassificationMetrics:
         self.window_size = window_size
         self.matrix = np.zeros((2, 2), dtype=int)
         self._window = deque(maxlen=window_size)
+        self._auc_true = []
+        self._auc_scores = []
 
-    def update(self, y_true_chunk, y_pred_chunk):
+    def update(self, y_true_chunk, y_pred_chunk, y_score_chunk=None):
+        """
+        Update classification metrics using a new chunk. Prediction scores are optional, so existing calls without scores still work. 
+        Only chunks with scores are used for ROC-AUC.
+
+        Parameters:
+        y_true_chunk: a 1D array containing true labels 0 and 1.
+        y_pred_chunk: a 1D array containing predicted labels 0 and 1.
+        y_score_chunk: a 1D array of positive-class scores or None.
+        Returns:
+        self: the updated StreamingClassificationMetrics object.
+        Raises:
+        ValueError: if inputs have invalid dimensions, lengths, labels, or prediction scores.
+        """
         y_true = np.asarray(y_true_chunk)
         y_pred = np.asarray(y_pred_chunk)
         if y_true.ndim != 1 or y_pred.ndim != 1:
             raise ValueError("Inputs must be 1D arrays")
-
         if y_true.shape != y_pred.shape:
             raise ValueError("Inputs must have the same shape")
-
         if y_true.size == 0:
             raise ValueError("Inputs cannot be empty")
-        
         if not np.all(np.isin(y_true, [0, 1])):
             raise ValueError("y_true must contain only 0 and 1")
-
         if not np.all(np.isin(y_pred, [0, 1])):
             raise ValueError("y_pred must contain only 0 and 1")
+        scores = None
+        if y_score_chunk is not None:
+            scores = np.asarray(y_score_chunk, dtype=float)
+            if scores.ndim != 1 or scores.shape != y_true.shape:
+                raise ValueError("Scores must be 1D and match labels")
+            if not np.all(np.isfinite(scores)):
+                raise ValueError("Scores must be finite")
+
         chunk_matrix = np.zeros((2, 2), dtype=int)
         np.add.at(chunk_matrix,(y_true.astype(int), y_pred.astype(int)), 1)
         self.matrix += chunk_matrix
         if self.window_size is not None:
             self._window.append(chunk_matrix)
+        if scores is not None:
+            self._auc_true.append(y_true.copy())
+            self._auc_scores.append(scores.copy())
         return self
+
 
     
     def _calculate_metrics(self, matrix):
@@ -298,21 +329,24 @@ class StreamingClassificationMetrics:
 
 
     def result(self):
-        return self._calculate_metrics(self.matrix)
+        result = self._calculate_metrics(self.matrix)
+        auc_value = None
+        if self._auc_true:
+            y_true = np.concatenate(self._auc_true)
+            y_score = np.concatenate(self._auc_scores)
+            if len(np.unique(y_true)) == 2:
+                auc_value = roc_auc_score(y_true, y_score)
+        result["auc"] = auc_value
+        return result
 
     
     def rolling_result(self):
         if self.window_size is None:
             raise ValueError("Rolling window is not enabled")
-
         if not self._window:
             window_matrix = np.zeros((2, 2), dtype=int)
         else:
-            window_matrix = np.sum(
-                np.stack(self._window),
-                axis=0
-            )
-
+            window_matrix = np.sum(np.stack(self._window), axis=0)
         return self._calculate_metrics(window_matrix)
 
 
@@ -320,4 +354,6 @@ class StreamingClassificationMetrics:
     def reset(self):
         self.matrix.fill(0)
         self._window.clear()
+        self._auc_true.clear()
+        self._auc_scores.clear()
         return self

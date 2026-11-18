@@ -35,3 +35,38 @@ def test_stream_trainer_time_and_memory():
     result = trainer.history[-1]
     assert result["training_time"] >= 0
     assert result["peak_memory_mb"] >= 0
+
+
+def test_trainer_cumulative_auc():
+    pipe = Pipeline([
+        ("tree", DecisionTreeClassifier(max_depth=0))
+    ])
+
+    X = np.array([[0], [1], [2], [3]])
+    y = np.array([0, 1, 0, 1])
+
+    pipe.fit(X, y)
+
+    trainer = StreamTrainer(pipe)
+    result = trainer.score_chunk(X, y)
+
+    assert np.isclose(result["cumulative_auc"], 0.5)
+    assert np.isclose(trainer.history[0]["cumulative_auc"], 0.5)
+
+
+def test_trainer_auc_cold_start():
+    pipe = Pipeline([
+        ("tree", DecisionTreeClassifier())
+    ])
+
+    trainer = StreamTrainer(pipe)
+
+    X = np.array([[0], [1]])
+    y = np.array([0, 1])
+
+    result = trainer.score_chunk(X, y)
+
+    assert result["cumulative_auc"] is None
+    assert trainer.history[0]["cumulative_auc"] is None
+
+

@@ -109,14 +109,14 @@ class Node:
     label: int or None, encoded prediction label for a leaf node.
     """
 
-    def __init__(self, feature=None, threshold=None,
-                 left=None, right=None, label=None):
+    def __init__(self, feature=None, threshold=None, left=None, right=None, label=None, class_counts=None):
 
         self.feature = feature
         self.threshold = threshold
         self.left = left
         self.right = right
         self.label = label
+        self.class_counts = class_counts
 
 
 class DecisionTreeClassifier:
@@ -255,25 +255,24 @@ class DecisionTreeClassifier:
     def _build(self, X, y, depth):
         """
         Recursively build a decision tree.
-
         Parameters:
         X: 2D NumPy array of features.
         y: 1D array of encoded integer labels.
         depth: current depth of the node.
-
         Returns:
         Node: root of the constructed subtree.
         """
-        majority_label = np.bincount(y).argmax()
+        counts = np.bincount(y)
+        majority_label = counts.argmax()
         if (depth >= self.max_depth
             or len(y) < self.min_samples_split
             or len(np.unique(y)) == 1):
-            return Node(label=majority_label)
+            return Node(label=majority_label, class_counts=counts)
 
         feature, threshold, gain = self._best_split(X, y)
 
         if feature is None:
-            return Node(label=majority_label)
+            return Node(label=majority_label, class_counts=counts)
         
         mask = X[:, feature] <= threshold
         return Node(
@@ -290,7 +289,6 @@ class DecisionTreeClassifier:
         Add a new data chunk to the training buffer. Stores the input features and labels until the number
         of buffered samples reaches buffer_size. The tree is then retrained from scratch using the buffered data, and the
         buffer is cleared. Between retraining events, predictions continue using the most recently trained tree.
-
         Parameters:
         X_chunk: a 2D NumPy array containing numerical features.
         y_chunk: a 1D array containing classification labels.
@@ -420,6 +418,45 @@ class DecisionTreeClassifier:
 
             predictions.append(node.label)
         return self.classes[np.array(predictions, dtype=int)]
+
+    
+    def predict_proba(self, X):
+        """
+        Predict class probabilities using the trained tree. Each sample follows the tree until reaching a leaf node.
+        Probabilities are calculated from the class counts in that leaf.
+        Parameters:
+        X: a 2D NumPy array containing numerical features.
+        Returns:
+        A 2D NumPy array containing the probability of each class.
+        The columns follow the order of self.classes.
+        Raises:
+        ValueError: if the tree has not been fitted or the input is invalid.
+        """
+        if self.root is None:
+            raise ValueError("Decision tree must be fitted first")
+        X = np.asarray(X, dtype=float)
+
+        if X.ndim != 2:
+            raise ValueError("X must be 2D")
+
+        if X.shape[1] != self.n_features:
+            raise ValueError("Feature count does not match")
+
+        if np.isinf(X).any():
+            raise ValueError("X cannot contain infinity")
+        probabilities = np.zeros((len(X), len(self.classes)))
+        for i, x in enumerate(X):
+            node = self.root
+            while node.label is None:
+                if x[node.feature] <= node.threshold:
+                    node = node.left
+                else:
+                    node = node.right
+            counts = node.class_counts
+            probabilities[i, :len(counts)] = counts / counts.sum()
+
+        return probabilities
+
 
 
 

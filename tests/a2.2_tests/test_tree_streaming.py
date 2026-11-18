@@ -60,3 +60,24 @@ def test_tree_invalid_buffer_size():
         DecisionTreeClassifier(buffer_size=0)
     with pytest.raises(TypeError):
         DecisionTreeClassifier(buffer_size=1.5)
+
+
+def test_tree_predict_proba():
+    tree = DecisionTreeClassifier(max_depth=0)
+
+    X = np.array([[0], [1], [2]])
+    y = np.array([0, 1, 1])
+
+    tree.fit(X, y)
+    result = tree.predict_proba([[3]])
+
+    assert result.shape == (1, 2)
+    assert np.allclose(result[0], [1/3, 2/3])
+
+
+def test_tree_predict_proba_not_fitted():
+    tree = DecisionTreeClassifier()
+
+    with pytest.raises(ValueError):
+        tree.predict_proba([[1]])
+
