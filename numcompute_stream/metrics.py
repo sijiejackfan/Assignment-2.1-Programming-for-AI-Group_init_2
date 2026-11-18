@@ -138,11 +138,94 @@ def mse(y_true, y_pred):
     squared_error = (y_true - y_pred) ** 2
     return float(np.mean(squared_error))
 
+
 def roc_curve(y_true, y_score):
-    pass
+    """
+    Calculate the ROC curve using binary labels and prediction scores.
+    Parameters:
+    y_true: a 1D array containing true labels 0 and 1.
+    y_score: a 1D array containing scores for the positive class.
+    Returns:
+    fpr: a 1D array containing false positive rates.
+    tpr: a 1D array containing true positive rates.
+    thresholds: a 1D array containing the score thresholds.
+
+    Raises:
+    ValueError: if the inputs are invalid or one class is missing.
+    """
+    y_true = np.asarray(y_true)
+    y_score = np.asarray(y_score, dtype=float)
+
+    if y_true.ndim != 1 or y_score.ndim != 1:
+        raise ValueError("Inputs must be 1D")
+
+    if len(y_true) == 0 or len(y_true) != len(y_score):
+        raise ValueError("Inputs must be non-empty and have the same length")
+
+    if not np.all(np.isin(y_true, [0, 1])):
+        raise ValueError("Labels must be 0 or 1")
+
+    if not np.all(np.isfinite(y_score)):
+        raise ValueError("Scores must be finite")
+
+    n_pos = np.sum(y_true == 1)
+    n_neg = np.sum(y_true == 0)
+
+    if n_pos == 0 or n_neg == 0:
+        raise ValueError("Both classes are required for ROC-AUC")
+
+    order = np.argsort(-y_score, kind="stable")
+    scores_sorted = y_score[order]
+    labels_sorted = y_true[order]
+    ends = np.r_[np.flatnonzero(np.diff(scores_sorted)), len(y_true) - 1]
+    tp = np.cumsum(labels_sorted == 1)[ends]
+    fp = np.cumsum(labels_sorted == 0)[ends]
+
+    tpr = np.r_[0.0, tp / n_pos]
+    fpr = np.r_[0.0, fp / n_neg]
+    thresholds = np.r_[np.inf, scores_sorted[ends]]
+
+    return fpr, tpr, thresholds
+
 
 def auc(fpr, tpr):
-    pass
+    """
+    Calculate the area under the ROC curve using trapezoids.
+    Parameters:
+    fpr: a 1D array of false positive rates in increasing order.
+    tpr: a 1D array of corresponding true positive rates.
+    Returns:
+    float: area under the ROC curve.
+    Raises:
+    ValueError: if the input arrays are invalid.
+    """
+    fpr = np.asarray(fpr, dtype=float)
+    tpr = np.asarray(tpr, dtype=float)
+
+    if (fpr.ndim != 1 or tpr.ndim != 1 or
+        len(fpr) < 2 or fpr.shape != tpr.shape):
+        raise ValueError("Invalid FPR or TPR arrays")
+
+    if not np.all(np.isfinite(fpr)) or not np.all(np.isfinite(tpr)):
+        raise ValueError("FPR and TPR must be finite")
+
+    if np.any(np.diff(fpr) < 0):
+        raise ValueError("FPR must be non-decreasing")
+
+    return float(np.sum((tpr[:-1] + tpr[1:]) * np.diff(fpr) / 2))
+
+
+def roc_auc_score(y_true, y_score):
+    """
+    Calculate binary ROC-AUC using true labels and prediction scores.
+    Parameters:
+    y_true: a 1D array containing true labels 0 and 1.
+    y_score: a 1D array containing positive-class scores.
+    Returns:
+    float: ROC-AUC score.
+    """
+    fpr, tpr, _ = roc_curve(y_true, y_score)
+    return auc(fpr, tpr)
 
 
 class StreamingClassificationMetrics:
