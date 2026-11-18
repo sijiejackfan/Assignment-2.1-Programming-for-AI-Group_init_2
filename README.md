@@ -58,8 +58,7 @@ For this 300-row example, the demo processes 10 chunks. With a buffer size of 60
 
 ### Step 5: Check the Streaming Metrics
 
-In `metrics.py`, `StreamingClassificationMetrics` supports binary classification with labels 0 and 1. Its `update()` method accumulates the confusion matrix, and `result()` returns the current Accuracy, Precision, Recall, and F1. `reset()` clears the accumulated data. It also supports rolling-window metrics over the most recent chunks.
-
+In `metrics.py`, `StreamingClassificationMetrics` supports binary classification with labels 0 and 1. Its  `update()` method accumulates the confusion matrix and prediction scores, while `result()` returns the cumulative Accuracy, Precision, Recall, F1, and ROC-AUC when available.
 `StreamTrainer` uses these metrics and saves the results in `trainer.history`. Users can read the history to see how the model performed over time, rather than only checking one final accuracy value.
 
 Training time covers the preprocessing and training call for that chunk. The recorded peak memory is measured with Python's `tracemalloc`; it is not the total memory used by the process. As memory tracking adds overhead, these timings should not be treated as controlled benchmark results.
@@ -75,6 +74,16 @@ The notebook also creates `demo/outputs/cumulative_f1.png`. The output folder is
 ![Accuracy over time](assets/readme_images/06_streaming_accuracy.png)
 
 ![F1 over time](assets/readme_images/07_streaming_f1.png)
+
+#### ROC-AUC Evaluation
+
+We also added ROC-AUC to evaluate how well the model distinguishes between positive and negative classes using prediction scores. `StreamTrainer` records Cumulative ROC-AUC across the evaluated chunks, which allows us to observe how the model performs as more data is processed.
+
+In our demo, the final Cumulative ROC-AUC is approximately 0.891, indicating good discrimination between the two classes. We also plotted the ROC Curve, which stays above the diagonal line representing random classification.
+
+![Cumulative ROC-AUC](assets/readme_images/10_cumulative_auc.png)
+
+![Streaming ROC Curve](assets/readme_images/11_roc_curve.png)
 
 ### Step 7: Compare Predictions with Ground Truth
 
@@ -129,6 +138,8 @@ Users can sort numerical arrays, find the largest or smallest values, or search 
 
 ## Performance Comparisons
 
+### Original NumCompute Benchmarking
+
 The package uses a benchmarking script to compare Python loops with NumPy operations for calculating a mean, squaring array elements and calculating Euclidean distance. The tests used input sizes of 100, 1,000, 10,000 and 100,000 elements, with the median of five runs used for timing.
 
 The results showed that NumPy was faster than Python loops in all tested cases. For 100,000 elements, the results were:
@@ -139,8 +150,38 @@ These results show the performance benefits of NumPy vectorisation for the selec
 
 To reproduce the benchmark results, run:
 
-python -m numcompute.benchmarking
+python -m benchmark.benchmarking
 
 The results will also be saved in benchmark_results.csv.
+
+### Vectorized Best Split Benchmark
+
+For Assignment 2.2, we implemented a vectorized version of the Decision Tree's Best Split calculation using NumPy sorting, cumulative counts and broadcasting. We compared it with the original loop-based implementation using four different sample sizes. Each test was repeated five times, and the median execution time was recorded.
+
+![tree benchmarking](assets/readme_images/12_tree_benchmarking.png)
+
+The results show that the vectorized implementation was much faster, especially for larger datasets. Both implementations were also tested to confirm that they produce consistent splitting results.
+
+To reproduce this benchmark, run:
+
+python -m benchmark.benchmark_tree_split
+
+The results are saved in benchmark/tree_split_results.csv.
+
+### Buffer Size Benchmark
+
+We also compared different buffer sizes to examine their effects on retraining frequency, training time and accuracy. The experiment used 300 synthetic samples, processed in chunks of 30, and was repeated five times. Accuracy was compared using the same evaluated chunks for all buffer sizes.
+
+![buffer size benchmarking](assets/readme_images/13_buffer_size_benchmarking.png)
+
+The results show that larger buffer sizes reduced the number of retraining events, although each retraining took longer. In this experiment, buffer size 120 achieved the highest accuracy and lowest total fit time. However, larger buffers also require more data before retraining and may leave some samples waiting in the buffer.
+
+The measured fit time includes memory-tracking overhead, so these results should be treated as comparisons under the same experimental conditions.
+
+To reproduce this benchmark, run:
+
+python -m benchmark.benchmark_buffer_size
+
+The results are saved in benchmark/buffer_size_results.csv.
 
 
